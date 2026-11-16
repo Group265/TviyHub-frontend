@@ -1,6 +1,4 @@
-# Tviy.hub — запуск фронтенда
 
-Фронтенд на React, TypeScript и Vite. Эта инструкция запускает именно папку `TviyHub-frontend` в VS Code на Windows. Исходники Java-бэкенда не изменялись.
 
 ## Что нужно
 
