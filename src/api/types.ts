@@ -1,0 +1,14 @@
+export type WorkspaceType = 'DESK' | 'MEETING_ROOM';
+export type BookingType = 'HOURLY' | 'DAILY' | 'SUBSCRIPTION';
+export interface Workspace { id: number; name: string; type: WorkspaceType }
+export interface Availability extends Workspace { isAvailable: boolean }
+export interface Tariff { id: number; workspaceType: WorkspaceType; bookingType: BookingType; price: number }
+export interface User { id: number; name: string; phone: string | null; email: string; role: 'USER' | 'ADMIN'; emailVerified: boolean; createdAt: string }
+export interface AdminUser extends User { blocked: boolean }
+export interface Tokens { accessToken: string; refreshToken: string; tokenType: string; expiresInSeconds: number; refreshExpiresInSeconds: number }
+export interface BookingRequest { workspaceId: number; bookingType: 'HOURLY' | 'DAILY'; bookingDates: string[]; startTime?: string; endTime?: string }
+export interface Booking { id: number; userId: number; workspaceId: number; workspaceName: string; bookingType: BookingType; bookingDate: string; startTime: string | null; endTime: string | null; totalPrice: number; status: string; paymentStatus: string }
+export interface HistoryItem { id: number; bookingDate: string; startTime: string | null; endTime: string | null; bookingType: BookingType; status: string; totalPrice: number; workspace: Workspace }
+export interface Page<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
+export interface Subscription { id: number; userId: number; workspaceId: number; startDate: string; endDate: string; status: string; paymentStatus: string }
+export interface Payment { id: number; status: string; amount: number; bookingId: number | null; subscriptionId: number | null; paymentMethod: string }
