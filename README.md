@@ -134,6 +134,4 @@ docker compose -f compose.frontend.yml up --build
 
 Оплата сейчас предусмотрена администратору. Полноценный Stripe-поток ограничен контрактом API: клиент не получает `paymentId` созданной брони.
 
-Подробности запросов, токенов, DTO и ограничений — в [docs/INTEGRATION_RU.md](docs/INTEGRATION_RU.md). Проверка неизменности бэкенда — [docs/backend-integrity.json](docs/backend-integrity.json).
 
-Опубликованный фронтенд и локальный запуск — разные среды: для опубликованного шлюза нужно отдельно задать доступный серверу `API_PROXY_TARGET`. Само размещение интерфейса не размещает Java и MySQL.
