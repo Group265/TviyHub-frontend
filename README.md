@@ -52,7 +52,7 @@ if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
 Открыть `.env.local` в VS Code. Для локального бэкенда оставь:
 
 ```dotenv
-API_PROXY_TARGET=http://localhost:8080
+API_PROXY_TARGET=http://127.0.0.1:8080
 VITE_API_BASE_URL=/api
 ```
 

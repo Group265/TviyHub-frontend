@@ -46,3 +46,110 @@ describe('API integration and rotating sessions',()=>{
     expect(calls[0].body).toEqual(data);expect(calls[2].url).toBe('/api/bookings/availability?date=2027-01-11&startTime=10%3A00&endTime=12%3A00');expect(calls.every(c=>c.auth==='Bearer access-1')).toBe(true);
   });
 });
+
+describe('backend error and history responses', () => {
+  it.each([
+    [409, 'Email is already registered', 'Ця електронна адреса вже використовується.'],
+    [409, 'Phone is already registered', 'Цей номер телефону вже використовується.'],
+    [409, 'Selected time slot overlaps with an existing booking', 'Вибраний час перетинається з іншим бронюванням.'],
+    [409, 'The hub is fully rented for an event on 2026-11-16', 'На 2026-11-16 весь простір заброньовано для події. Оберіть іншу дату.'],
+    [403, 'Access denied', 'У вас немає прав для цієї дії.'],
+    [403, 'Verify your email first', 'Спочатку підтвердьте електронну пошту.'],
+    [400, 'Invalid or expired code', 'Код неправильний або строк його дії закінчився.'],
+    [400, 'Current password is incorrect', 'Поточний пароль неправильний.'],
+    [400, 'Cannot cancel a booking that has already started or passed', 'Бронювання вже почалося або завершилося. Скасувати його неможливо.'],
+    [400, ' Cannot cancel a booking that has already started or passed. ', 'Бронювання вже почалося або завершилося. Скасувати його неможливо.'],
+    [400, 'HOURLY bookings can only be cancelled at least 2 hours before the start time', 'Погодинне бронювання можна скасувати щонайменше за 2 год. до початку.'],
+    [429, 'Please wait before requesting a new code', 'Зачекайте трохи, перш ніж запросити новий код.'],
+    [503, 'Could not send the email, try again later', 'Не вдалося надіслати лист із кодом. Спробуйте пізніше.'],
+  ])('shows the specific API detail for %s %s', async (status, detail, expected) => {
+    const { request, errorMessage } = await import('../src/api/client');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status, detail, title: 'Problem' }), {
+      status, headers: { 'Content-Type': 'application/problem+json' },
+    })));
+    await expect(request('/example').catch(errorMessage)).resolves.toBe(expected);
+  });
+
+  it('localizes validation fields and tolerates malformed error responses', async () => {
+    const { request, errorMessage } = await import('../src/api/client');
+    const message = async () => {
+      try { await request('/example'); }
+      catch (err) { return errorMessage(err); }
+      throw new Error('Expected the request to fail');
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => response({ detail: 'Validation failed', errors: {
+      confirmNewPassword: 'passwords do not match',
+      'bookingDates[0]': 'Booking date cannot be in the past',
+      unexpected: { internal: 'ignored' },
+    } }, 400)));
+    expect(await message()).toBe('Підтвердження нового пароля · Паролі не збігаються. Дата бронювання · Оберіть сьогоднішню або майбутню дату.');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{bad-json', { status: 503, headers: { 'Content-Type': 'application/json' } })));
+    expect(await message()).toBe('Сервіс тимчасово недоступний. Спробуйте пізніше.');
+    vi.stubGlobal('fetch', vi.fn(async () => response(null, 404)));
+    expect(await message()).toBe('Запитані дані не знайдено.');
+  });
+
+  it('shows the phone format hint without the API field name or English validation detail', async () => {
+    const { errorMessage, storeTokens } = await import('../src/api/client');
+    const { api } = await import('../src/api');
+    storeTokens(tokens());
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      title: 'Bad Request',
+      status: 400,
+      detail: 'Validation failed',
+      errors: { newPhone: 'must be in international format, e.g. +380671234567' },
+    }), { status: 400, headers: { 'Content-Type': 'application/problem+json' } }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(api.requestChange('phone', { newPhone: '0671234567' }).catch(errorMessage)).resolves.toBe(
+      'Введіть номер телефону в міжнародному форматі, наприклад +380671234567.',
+    );
+  });
+
+  it('reads all upcoming candidate pages before the UI paginates filtered results', async () => {
+    const { storeTokens } = await import('../src/api/client');
+    const { api } = await import('../src/api');
+    storeTokens(tokens());
+    const fetcher = vi.fn(async (url: string) => url.includes('page=0')
+      ? response({ content: [{ id: 7, status: 'CANCELLED' }], totalPages: 2 })
+      : response({ content: [{ id: 18, status: 'CONFIRMED' }], totalPages: 2 }));
+    vi.stubGlobal('fetch', fetcher);
+    expect(await api.upcomingHistory()).toEqual([{ id: 7, status: 'CANCELLED' }, { id: 18, status: 'CONFIRMED' }]);
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      '/api/users/me/bookings?page=0&size=100&scope=upcoming',
+      '/api/users/me/bookings?page=1&size=100&scope=upcoming',
+    ]);
+  });
+});
+
+describe('registration and email verification', () => {
+  it('sends password confirmation and signs in with the returned verification tokens', async () => {
+    const { api } = await import('../src/api');
+    const client = await import('../src/api/client');
+    const registration = { name: 'Олена Тест', phone: '+380671234567', email: 'olena@example.com', password: 'StrongPass123', confirmPassword: 'StrongPass123' };
+    const codes = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/auth/register')) {
+        expect(JSON.parse(String(init.body))).toEqual(registration);
+        return response({ email: registration.email, codeExpiresInSeconds: 600 }, 202);
+      }
+      if (url.endsWith('/auth/verify-email')) {
+        const body = JSON.parse(String(init.body));
+        expect(body.email).toBe(registration.email);
+        codes(body.code);
+        return body.code === '123456' ? response(tokens()) : response({ detail: 'Invalid or expired code' }, 400);
+      }
+      expect(url).toBe('/api/users/me');
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer access-1');
+      return response({ email: registration.email, emailVerified: true });
+    }));
+
+    await expect(api.register(registration)).resolves.toEqual({ email: registration.email, codeExpiresInSeconds: 600 });
+    expect(client.hasSession()).toBe(false);
+    await expect(api.verify(registration.email, '111111')).rejects.toMatchObject({ status: 400 });
+    expect(client.hasSession()).toBe(false);
+    await api.verify(registration.email, '123456');
+    expect(codes.mock.calls).toEqual([['111111'], ['123456']]);
+    expect(client.hasSession()).toBe(true);
+    await expect(api.me()).resolves.toMatchObject({ emailVerified: true });
+  });
+});

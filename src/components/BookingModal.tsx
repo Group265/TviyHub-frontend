@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { ApiError, errorMessage } from '../api/client';
+import { errorMessage, isBookingAvailabilityConflict, isUnconfirmedWrite } from '../api/errors';
 import type { BookingType, Tariff, User, Workspace } from '../api/types';
 import { bookingPayload, bookingValidation, displayWorkspace, endTime, money, nextBookingSlot, nextWorkingDay, venueToday } from '../booking';
-import { Alert, Icon, Modal } from './ui';
+import { Alert, Icon, Modal, ukrainianFormValidation } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
 interface BookingModalProps {
@@ -52,8 +52,17 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
       setQuote({key:quoteKey,price:3500,available:null});setChecking(false);return ()=>controller.abort();
     }
     Promise.all([api.price(payload,controller.signal),api.availability(date,type==='DAILY'?'09:00':start,type==='DAILY'?'19:00':endTime(start,hours),controller.signal)])
-      .then(([amount,map])=>{if(!controller.signal.aborted){if(!Number.isFinite(Number(amount)))throw new Error('Сервіс не повернув вартість.');setQuote({key:quoteKey,price:Number(amount),available:map.find(w=>w.id===workspace.id)?.isAvailable===true});}})
-      .catch(err=>{if(!controller.signal.aborted)setError(errorMessage(err));})
+      .then(([amount,map])=>{if(!controller.signal.aborted){if(typeof amount !== 'number' || !Number.isFinite(amount)) {
+        setError('Сервіс не повернув вартість бронювання.');
+        return;
+      }
+      const item = map.find(w => w.id === workspace.id);
+      if (!item) {
+        setError('Сервіс не повернув дані про доступність цього місця.');
+        return;
+      }
+      setQuote({key:quoteKey,price:amount,available:item.isAvailable});}})
+      .catch(err=>{if(!controller.signal.aborted)setError(errorMessage(err, 'Не вдалося перевірити доступність або вартість бронювання.'));})
       .finally(()=>{if(!controller.signal.aborted)setChecking(false);});
     return ()=>controller.abort();
   },[payload,date,start,hours,type,validation,workspace?.id,quoteKey,retry,success]);
@@ -69,18 +78,31 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
         setSuccess(`${displayWorkspace(workspace)} утримується з ${result.startDate} до ${result.endDate}. Абонемент очікує оплати. Для підтвердження зверніться до адміністратора протягом 24 годин.`);
       } else {
         const created=await api.book(payload);
-        if(!created.length)throw new Error('Сервер не повернув створене бронювання. Перевірте історію перед повторною спробою.');
+        if (!Array.isArray(created) || !created.length) {
+          setError('Сервер не підтвердив створення бронювання. Перевірте історію перед повторною спробою.');
+          return;
+        }
         setSuccess(`Бронювання №${created[0].id} підтверджено: ${displayWorkspace(workspace)}. ${date}, ${type==='DAILY'?'09:00–19:00':`${start}–${endTime(start,hours)}`}. До сплати: ${money(created[0].totalPrice)}. Оплата адміністратору.`);
       }
       onCreated();
-    }catch(err){setError(err instanceof ApiError&&err.status===0?'Не отримано підтвердження від сервера. Перевірте історію бронювань перед повторною спробою.':errorMessage(err));if(err instanceof ApiError&&err.status===409&&type!=='SUBSCRIPTION'){setQuote(current=>current?.key===quoteKey?{...current,available:false}:current);} }
+    } catch (err) {
+      if (isUnconfirmedWrite(err)) {
+        const location = type === 'SUBSCRIPTION' ? 'список абонементів' : 'історію бронювань';
+        setError(`Не отримано підтвердження від сервісу. Перевірте ${location} перед повторною спробою.`);
+      } else {
+        setError(errorMessage(err, 'Не вдалося оформити бронювання.'));
+      }
+      if (type !== 'SUBSCRIPTION' && isBookingAvailabilityConflict(err)) {
+        setQuote(current => current?.key === quoteKey ? {...current,available:false} : current);
+      }
+    }
     finally{setBusy(false);}
   }
   const monthlyTariff=tariffs.find(t=>t.workspaceType==='DESK'&&t.bookingType==='SUBSCRIPTION');
   return <Modal title="Бронювання місця" onClose={onClose}>
     <p className="eyebrow">Оформлення бронювання · час Києва</p>
     {success?<><Alert success>{success}</Alert><button className="btn full" onClick={onClose}>Готово</button></>:<>
-      <form className="form" onSubmit={submit}>
+      <form {...ukrainianFormValidation} className="form" onSubmit={submit}>
         <label>Місце для бронювання<select required disabled={busy} value={workspace?.id??''} onChange={e=>setWorkspaceId(Number(e.target.value))}>
           <option value="" disabled>{type==='HOURLY'?'Оберіть стіл або переговорну':'Оберіть стіл'}</option>
           <optgroup label="Робочі столи">{choices.filter(w=>w.type==='DESK').map(w=><option key={w.id} value={w.id}>{displayWorkspace(w)}</option>)}</optgroup>
@@ -95,10 +117,10 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
         {monthlyTariff&&type==='SUBSCRIPTION'&&monthlyTariff.price!==3500&&<Alert>Вартість абонемента потребує уточнення в адміністратора.</Alert>}
         {validation&&<Alert>{validation}{type==='HOURLY'&&<> <button type="button" disabled={busy} className="text-button" onClick={()=>{const slot=nextBookingSlot();setDate(slot.date);setStart(slot.start);setHours(1);}}>Обрати найближчий час</button></>}</Alert>}{error&&<Alert>{error}</Alert>}
         {!workspace&&<p className="muted" role="status">Оберіть місце зі списку, щоб перевірити наявність і вартість.</p>}
-        {available===false&&!error&&<Alert>Місце зайняте у вибраний час. Оберіть інше місце, дату або час.</Alert>}
+        {available===false&&!error&&<Alert>Місце недоступне у вибраний час. Оберіть інше місце, дату або час.</Alert>}
         <div className="booking-total"><div><small>Разом до сплати:</small><strong>{checking?'Уточнюємо…':price===null?'—':money(price)}</strong></div><span className="pill">Оплата адміністратору</span></div>
         <button className="btn full" disabled={!workspace||busy||checking||!!validation||price===null||(type!=='SUBSCRIPTION'&&available!==true)}>{busy?'Оформлюємо…':'Забронювати'}<Icon name="imgIconCalendar"/></button>
-        {error&&<button type="button" className="text-button" onClick={()=>setRetry(v=>v+1)}>Перевірити ще раз</button>}
+        {error&&type!=='SUBSCRIPTION'&&<button type="button" className="text-button" onClick={()=>setRetry(v=>v+1)}>Оновити доступність і вартість</button>}
       </form>
     </>}
   </Modal>;

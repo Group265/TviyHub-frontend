@@ -1,3 +1,4 @@
+import { ApiError } from './errors';
 import type { Tokens } from './types';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
@@ -29,28 +30,8 @@ export function clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch { /* Storage can be unavailable. */ }
   notify();
 }
-export class ApiError extends Error {
-  constructor(public status: number, message: string, public fields: Record<string, string> = {}) { super(message); }
-}
-export function errorMessage(error: unknown): string {
-  if (!(error instanceof ApiError)) return error instanceof Error ? error.message : 'Не вдалося виконати дію.';
-  const known: Record<string, string> = {
-    'Invalid email or password': 'Неправильна пошта або пароль.',
-    'Account is blocked': 'Цей обліковий запис заблоковано. Зверніться до адміністратора.',
-    'Validation failed': 'Перевірте введені дані.',
-  };
-  const defaults: Record<number, string> = {
-    0: 'Немає зв’язку із сервісом. Спробуйте пізніше.',
-    401: 'Сесія завершилася. Увійдіть знову.',
-    403: 'Недостатньо прав для цієї дії. Перевірте підтвердження пошти.',
-    409: 'Дані конфліктують із наявними. Для бронювання оберіть інше місце або час.',
-    429: 'Забагато спроб. Зачекайте перед наступною спробою.',
-    502: 'Сервіс тимчасово недоступний. Спробуйте пізніше.',
-    503: 'Сервіс тимчасово недоступний. Спробуйте пізніше.',
-  };
-  const main = known[error.message] || defaults[error.status] || error.message;
-  return Object.keys(error.fields).length ? `${main} ${Object.entries(error.fields).map(([key, text]) => `${key}: ${text}`).join('; ')}` : main;
-}
+export { ApiError, errorMessage } from './errors';
+
 async function raw<T>(path: string, init: RequestInit, token?: string): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
@@ -65,13 +46,25 @@ async function raw<T>(path: string, init: RequestInit, token?: string): Promise<
     const response = await fetch(`${BASE}${path}`, { ...init, headers, signal: controller.signal });
     if (response.status === 204) return undefined as T;
     const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('json')) throw new ApiError(response.ok ? 502 : response.status, 'API повернув не JSON. Перевірте адресу сервера та проксі.');
-    const body = await response.json();
-    if (!response.ok) throw new ApiError(response.status, body.detail || body.message || body.title || 'Помилка сервера.', body.errors || {});
+    if (!contentType.includes('json')) throw new ApiError(response.ok ? 502 : response.status, '');
+
+    const body: unknown = await response.json().catch(error => {
+      if (controller.signal.aborted) throw error;
+      throw new ApiError(response.ok ? 502 : response.status, '');
+    });
+    if (!response.ok) {
+      const problem = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+      const detail = [problem.detail, problem.message, problem.title].find(value => typeof value === 'string' && value.trim());
+      const fields = problem.errors && typeof problem.errors === 'object' && !Array.isArray(problem.errors)
+        ? Object.fromEntries(Object.entries(problem.errors).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+        : {};
+      throw new ApiError(response.status, typeof detail === 'string' ? detail : '', fields);
+    }
     return body as T;
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (init.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (controller.signal.aborted) throw new ApiError(0, 'Сервіс не відповів вчасно. Спробуйте пізніше.');
     throw new ApiError(0, 'Немає зв’язку із сервісом. Спробуйте пізніше.');
   } finally { clearTimeout(timer); init.signal?.removeEventListener('abort', abort); }
 }

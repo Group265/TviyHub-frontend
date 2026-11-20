@@ -1,4 +1,4 @@
-import type { BookingRequest, BookingType, Workspace } from './api/types';
+import type { BookingRequest, BookingType, HistoryItem, Subscription, User, Workspace } from './api/types';
 
 // A local date in the venue's timezone. Avoid toISOString(), which can change the day.
 export function venueToday(now = new Date()): string {
@@ -16,6 +16,36 @@ export const endTime = (start: string, hours: number) => `${String(Number(start.
 export function venueTime(now = new Date()): string {
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(now);
 }
+export const bookingOpenTime = '09:00';
+export const bookingCloseTime = '19:00';
+type BookingSchedule = Pick<HistoryItem, 'bookingDate' | 'startTime' | 'endTime' | 'status'>;
+
+export function venueDateTime(now = new Date()): string {
+  return `${venueToday(now)}T${venueTime(now)}`;
+}
+
+function bookingDateTime(date: string, time: string): string {
+  return `${date}T${time.length === 5 ? `${time}:00` : time}`;
+}
+
+export function bookingDisplayStatus(booking: BookingSchedule, now: string): string {
+  return booking.status === 'CONFIRMED' && bookingDateTime(booking.bookingDate, booking.endTime ?? bookingCloseTime) <= now
+    ? 'COMPLETED'
+    : booking.status;
+}
+
+export function isUpcomingBooking(booking: BookingSchedule, now: string): boolean {
+  return bookingDisplayStatus(booking, now) === 'CONFIRMED';
+}
+
+export function canCancelBooking(booking: BookingSchedule, now: string): boolean {
+  return booking.status === 'CONFIRMED' && bookingDateTime(booking.bookingDate, booking.startTime ?? bookingOpenTime) > now;
+}
+
+export function isCurrentSubscription(subscription: Pick<Subscription, 'status' | 'endDate'>, today: string): boolean {
+  return (subscription.status === 'ACTIVE' || subscription.status === 'PENDING_PAYMENT') && subscription.endDate >= today;
+}
+
 function followingDay(date: string): string {
   const day = new Date(`${date}T12:00:00Z`); day.setUTCDate(day.getUTCDate() + 1); return day.toISOString().slice(0,10);
 }
@@ -37,6 +67,27 @@ export function bookingValidation(date: string, start: string, hours: number, ty
 export function bookingPayload(workspaceId: number, type: 'HOURLY' | 'DAILY', date: string, start: string, hours: number): BookingRequest {
   return { workspaceId, bookingType: type, bookingDates: [date], ...(type === 'HOURLY' ? { startTime: start, endTime: endTime(start,hours) } : {}) };
 }
-export function displayWorkspace(w: Workspace): string { const match = /[№#]?\s*(\d+)$/.exec(w.name); return w.type === 'MEETING_ROOM' ? 'Переговорна кімната' : match ? `Стіл #${match[1]}` : w.name; }
+export function displayWorkspace(workspace: Omit<Workspace, 'type'> & { type?: Workspace['type'] }): string {
+  const name = workspace.name.trim();
+  const number = /(?:^|[^\d])(\d+)$/.exec(name)?.[1];
+  if (workspace.type === 'MEETING_ROOM' || /^meeting[ _-]+room\b/i.test(name)) {
+    return number ? `Переговорна кімната №${number}` : 'Переговорна кімната';
+  }
+  if (number) return `Робоче місце №${number}`;
+  return name && !/\p{Script=Latin}/u.test(name) ? name : `Робоче місце №${workspace.id}`;
+}
+
 export const money = (value: number) => `${new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(Number(value))} грн`;
-export const statusText = (status: string) => ({ CONFIRMED: 'Підтверджено', CANCELLED: 'Скасовано', PENDING_PAYMENT: 'Очікує оплати', ACTIVE: 'Активний', EXPIRED: 'Завершено', PAID: 'Сплачено', UNPAID: 'Не сплачено', REFUND_PENDING: 'Очікує повернення', REFUNDED: 'Повернено' })[status] || status;
+
+const statusLabels = new Map([
+  ['CONFIRMED', 'Підтверджено'], ['CANCELLED', 'Скасовано'], ['COMPLETED', 'Завершено'],
+  ['PENDING_PAYMENT', 'Очікує оплати'], ['ACTIVE', 'Активний'], ['EXPIRED', 'Завершено'],
+  ['PAID', 'Сплачено'], ['UNPAID', 'Не сплачено'], ['REFUND_PENDING', 'Очікує повернення'], ['REFUNDED', 'Повернено'],
+]);
+export const statusText = (status: string | null | undefined) => status ? statusLabels.get(status) ?? 'Невідомий статус' : '—';
+
+const bookingTypeLabels: Record<BookingType, string> = { HOURLY: 'Погодинне', DAILY: 'На весь день', SUBSCRIPTION: 'Абонемент' };
+export const bookingTypeText = (type: BookingType) => bookingTypeLabels[type] ?? 'Невідомий формат';
+
+const roleLabels: Record<User['role'], string> = { ADMIN: 'Адміністратор', USER: 'Користувач' };
+export const roleText = (role: User['role']) => roleLabels[role] ?? 'Невідома роль';

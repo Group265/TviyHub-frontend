@@ -1,11 +1,38 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react';
 import assets from '../assets.json';
 
 export function Icon({ name }: { name: keyof typeof assets }) { return <img className="icon" src={assets[name]} alt="" aria-hidden="true" />; }
 const logoLayers: [keyof typeof assets, number, number][] = [
-  ['imgVector',32.38,0],['imgVector1',13.64,1.9],['imgVector2',4.09,8.6],['imgVector3',53.76,21.28],['imgVector4',60.9,36.32],['imgVector5',24.44,20.06],['imgVector6',56.91,27.76],['imgVector7',70.29,33.98],['imgVector8',64.86,38.25],['imgGroup',0,63.09],['imgGroup1',44.87,63.54],['imgVector9',38.66,75.9],
+  ['imgVector',32.38,0],['imgVector1',13.64,1.9],['imgVector2',4.09,8.6],['imgVector3',53.76,21.28],['imgVector4',60.9,36.32],['imgVector5',24.44,20.06],['imgVector6',56.91,27.76],['imgVector7',70.29,33.98],['imgVector8',64.86,38.25],
 ];
-export function Logo() { return <a href="#home" className="logo" aria-label="Tviy.hub — на початок">{logoLayers.map(([name,left,top]) => <img key={name} src={assets[name]} alt="" style={{left,top}} />)}</a>; }
+export function Logo() {
+  return <a href="#home" className="logo" aria-label="Твій хаб — на початок">
+    {logoLayers.map(([name,left,top]) => <img key={name} src={assets[name]} alt="" style={{left,top}} />)}
+    <span className="logo-wordmark" aria-hidden="true"><span>Твій</span> хаб</span>
+  </a>;
+}
+
+export const ukrainianFormValidation = {
+  onInvalid(event: FormEvent<HTMLFormElement>) {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) return;
+
+    const { validity } = field;
+    let message = 'Перевірте значення в цьому полі.';
+    if (validity.valueMissing) message = field instanceof HTMLSelectElement ? 'Оберіть варіант.' : 'Заповніть це поле.';
+    else if (validity.typeMismatch && field.type === 'email') message = 'Введіть коректну адресу електронної пошти.';
+    else if (validity.patternMismatch && field.name === 'code') message = 'Введіть шість цифр із листа.';
+    else if (validity.tooShort && field instanceof HTMLInputElement) message = `Введіть щонайменше ${field.minLength} символів.`;
+    else if (validity.tooLong && field instanceof HTMLInputElement) message = `Введіть не більше ${field.maxLength} символів.`;
+    else if (validity.rangeUnderflow && field.type === 'date') message = 'Оберіть сьогоднішню або майбутню дату.';
+    field.setCustomValidity(message);
+  },
+  onChange(event: FormEvent<HTMLFormElement>) {
+    const field = event.target;
+    if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.setCustomValidity('');
+  },
+};
+
 export function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();

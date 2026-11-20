@@ -3,6 +3,9 @@ server {
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
+    error_page 400 403 404 405 413 414 429 500 502 503 504 /pomylka.html;
+
+    location = /pomylka.html { internal; }
 
     location /api/ {
         proxy_pass ${API_PROXY_TARGET};
