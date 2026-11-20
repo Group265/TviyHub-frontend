@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import assets from '../assets.json';
 
 export function Icon({ name }: { name: keyof typeof assets }) { return <img className="icon" src={assets[name]} alt="" aria-hidden="true" />; }
@@ -12,26 +12,29 @@ export function Logo() {
   </a>;
 }
 
-export const ukrainianFormValidation = {
-  onInvalid(event: FormEvent<HTMLFormElement>) {
-    const field = event.target;
-    if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) return;
-
+// Forms use noValidate so all messages are rendered by the app in Ukrainian.
+export function formValidationError(form: HTMLFormElement): string {
+  for (const field of form.elements) {
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) continue;
     const { validity } = field;
-    let message = 'Перевірте значення в цьому полі.';
-    if (validity.valueMissing) message = field instanceof HTMLSelectElement ? 'Оберіть варіант.' : 'Заповніть це поле.';
-    else if (validity.typeMismatch && field.type === 'email') message = 'Введіть коректну адресу електронної пошти.';
-    else if (validity.patternMismatch && field.name === 'code') message = 'Введіть шість цифр із листа.';
-    else if (validity.tooShort && field instanceof HTMLInputElement) message = `Введіть щонайменше ${field.minLength} символів.`;
-    else if (validity.tooLong && field instanceof HTMLInputElement) message = `Введіть не більше ${field.maxLength} символів.`;
-    else if (validity.rangeUnderflow && field.type === 'date') message = 'Оберіть сьогоднішню або майбутню дату.';
-    field.setCustomValidity(message);
-  },
-  onChange(event: FormEvent<HTMLFormElement>) {
-    const field = event.target;
-    if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.setCustomValidity('');
-  },
-};
+    if (!field.willValidate || validity.valid) continue;
+
+    field.focus();
+    if (field instanceof HTMLSelectElement) return 'Оберіть варіант зі списку.';
+    if (field.type === 'date' && (validity.valueMissing || validity.badInput)) return 'Оберіть дату.';
+    if (validity.valueMissing) {
+      const label = field.labels?.[0]?.textContent?.trim();
+      return label ? `${label} · Заповніть це поле.` : 'Заповніть це поле.';
+    }
+    if (validity.typeMismatch && field.type === 'email') return 'Введіть коректну адресу електронної пошти.';
+    if (validity.patternMismatch && field.name === 'code') return 'Введіть шість цифр із листа.';
+    if (validity.tooShort) return `Введіть щонайменше ${field.minLength} символів.`;
+    if (validity.tooLong) return `Введіть не більше ${field.maxLength} символів.`;
+    if (validity.rangeUnderflow && field.type === 'date') return 'Оберіть сьогоднішню або майбутню дату.';
+    return 'Перевірте значення в цьому полі.';
+  }
+  return '';
+}
 
 export function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);

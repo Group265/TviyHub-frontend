@@ -3,7 +3,7 @@ import { api } from '../api';
 import { errorMessage, isBookingAvailabilityConflict, isUnconfirmedWrite } from '../api/errors';
 import type { BookingType, Tariff, User, Workspace } from '../api/types';
 import { bookingPayload, bookingValidation, displayWorkspace, endTime, money, nextBookingSlot, nextWorkingDay, venueToday } from '../booking';
-import { Alert, Icon, Modal, ukrainianFormValidation } from './ui';
+import { Alert, Icon, Modal, formValidationError } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
 interface BookingModalProps {
@@ -66,11 +66,12 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
       .finally(()=>{if(!controller.signal.aborted)setChecking(false);});
     return ()=>controller.abort();
   },[payload,date,start,hours,type,validation,workspace?.id,quoteKey,retry,success]);
-  async function submit(e: FormEvent) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const currentValidation=bookingValidation(date,start,hours,type);
+    if (busy) return;
+    const currentValidation = formValidationError(e.currentTarget) || bookingValidation(date, start, hours, type);
     if(currentValidation){setError(currentValidation);return;}
-    if(!workspace||!payload||busy||checking||validation||price===null||(type!=='SUBSCRIPTION'&&available!==true))return;
+    if(!workspace||!payload||checking||validation||price===null||(type!=='SUBSCRIPTION'&&available!==true))return;
     setBusy(true);setError('');
     try {
       if(type==='SUBSCRIPTION') {
@@ -102,7 +103,7 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
   return <Modal title="Бронювання місця" onClose={onClose}>
     <p className="eyebrow">Оформлення бронювання · час Києва</p>
     {success?<><Alert success>{success}</Alert><button className="btn full" onClick={onClose}>Готово</button></>:<>
-      <form {...ukrainianFormValidation} className="form" onSubmit={submit}>
+      <form noValidate className="form" onSubmit={submit}>
         <label>Місце для бронювання<select required disabled={busy} value={workspace?.id??''} onChange={e=>setWorkspaceId(Number(e.target.value))}>
           <option value="" disabled>{type==='HOURLY'?'Оберіть стіл або переговорну':'Оберіть стіл'}</option>
           <optgroup label="Робочі столи">{choices.filter(w=>w.type==='DESK').map(w=><option key={w.id} value={w.id}>{displayWorkspace(w)}</option>)}</optgroup>

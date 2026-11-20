@@ -1,4 +1,4 @@
-import { ApiError } from './errors';
+import { ApiError, networkError, timeoutError } from './errors';
 import type { Tokens } from './types';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
@@ -41,6 +41,8 @@ async function raw<T>(path: string, init: RequestInit, token?: string): Promise<
   try {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
+    // Keep server-side validation messages stable for the Ukrainian translations.
+    headers.set('Accept-Language', 'en');
     if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const response = await fetch(`${BASE}${path}`, { ...init, headers, signal: controller.signal });
@@ -64,8 +66,8 @@ async function raw<T>(path: string, init: RequestInit, token?: string): Promise<
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (init.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (controller.signal.aborted) throw new ApiError(0, 'Сервіс не відповів вчасно. Спробуйте пізніше.');
-    throw new ApiError(0, 'Немає зв’язку із сервісом. Спробуйте пізніше.');
+    if (controller.signal.aborted) throw new ApiError(0, timeoutError);
+    throw new ApiError(0, networkError);
   } finally { clearTimeout(timer); init.signal?.removeEventListener('abort', abort); }
 }
 async function refresh(): Promise<void> {

@@ -7,7 +7,7 @@ import {
   bookingCloseTime, bookingDisplayStatus, bookingOpenTime, canCancelBooking, displayWorkspace,
   isCurrentSubscription, isUpcomingBooking, money, statusText, venueDateTime,
 } from '../booking';
-import { Alert, Icon, Modal, Pager, ukrainianFormValidation } from './ui';
+import { Alert, Icon, Modal, Pager, formValidationError } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
 export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogoutError }: { user: User; onClose: () => void; onUser: (u: User | null) => void; onRepeat: (w: Workspace, item: HistoryItem) => void; onVerify: () => void; onLogoutError: (message: string) => void }) {
@@ -72,7 +72,13 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
     if (confirmCancel && !canConfirmCancel) setConfirmCancel(null);
   }, [confirmCancel, canConfirmCancel]);
   async function submit(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();if(busy||!edit)return;setBusy(true);setError('');setNotice('');
+    e.preventDefault();
+    if (busy || !edit) return;
+    setNotice('');
+    const validationError = formValidationError(e.currentTarget);
+    setError(validationError);
+    if (validationError) return;
+    setBusy(true);
     const form=new FormData(e.currentTarget);const get=(name:string)=>String(form.get(name)||'');
     try{
       if(edit==='name'){onUser(await api.updateName(get('name').trim()));setEdit(null);setNotice('Ім’я оновлено.');}
@@ -136,7 +142,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
     {!user.emailVerified&&<Alert>Пошта не підтверджена. <button className="text-button" onClick={onVerify}>Підтвердити пошту</button></Alert>}
     <div className="actions">{(['name','phone','email','password'] as const).map(kind=><button className="btn outline small" key={kind} disabled={kind!=='name'&&!user.emailVerified} onClick={()=>{setEdit(kind);setCodeStep(false);setError('');setNotice('');}}>{({name:'Змінити ім’я',phone:'Телефон',email:'Пошта',password:'Пароль'})[kind]}</button>)}<button className="text-button muted" disabled={busy} onClick={signout}>Вийти</button></div>
     {error&&<Alert>{error}</Alert>}{notice&&<Alert success>{notice}</Alert>}
-    {edit&&<form {...ukrainianFormValidation} className="form edit-panel" onSubmit={submit} key={`${edit}-${codeStep}`}><h3>{({name:'Редагування профілю',phone:'Зміна телефону',email:'Зміна пошти',password:'Зміна пароля'})[edit]}</h3>
+    {edit&&<form noValidate className="form edit-panel" onSubmit={submit} key={`${edit}-${codeStep}`}><h3>{({name:'Редагування профілю',phone:'Зміна телефону',email:'Зміна пошти',password:'Зміна пароля'})[edit]}</h3>
       {codeStep?<label>Код із листа<input name="code" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code"/></label>:<>
         {edit==='name'&&<label>Ім’я та прізвище<input name="name" required maxLength={100} defaultValue={user.name} autoComplete="name"/></label>}
         {edit==='phone'&&<label>Новий номер телефону<input name="newPhone" type="tel" required placeholder="+380..."/></label>}
