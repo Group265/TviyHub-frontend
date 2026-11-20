@@ -82,10 +82,27 @@ const fieldLabels = new Map(Object.entries({
 export const phoneFormatError = 'Введіть номер телефону в міжнародному форматі, наприклад +380671234567.';
 export const passwordsMismatch = 'Паролі не збігаються.';
 
+const defaultRequiredMessage = 'Заповніть це поле.';
+const requiredValidationDetails = new Set([
+  'must not be blank', 'must not be null', 'must not be empty',
+  'не должно быть пустым', 'не может быть пустым', 'не должно равняться null',
+]);
+
+export function requiredFieldMessage(field: string): string {
+  if (field === 'confirmPassword') return 'Повторіть пароль.';
+  if (field === 'confirmNewPassword') return 'Повторіть новий пароль.';
+  return defaultRequiredMessage;
+}
+
 function fieldError(field: string, message: string): string | undefined {
-  const label = fieldLabels.get(field.replace(/\[\d+\].*$/, ''));
+  const name = field.replace(/\[\d+\].*$/, '');
+  const label = fieldLabels.get(name);
   const detail = message.trim();
-  if (/^must be in international format(?:,|\.|$)/i.test(detail) && /^(newPhone|phone)$/.test(field)) {
+  if (requiredValidationDetails.has(detail.toLowerCase().replace(/[.!]$/, ''))) {
+    const text = requiredFieldMessage(name);
+    return label && text === defaultRequiredMessage ? `${label} · ${text}` : text;
+  }
+  if (/^must be in international format(?:,|\.|$)/i.test(detail) && /^(newPhone|phone)$/.test(name)) {
     return phoneFormatError;
   }
   const size = /^size must be between (\d+) and (\d+)$/.exec(detail);
@@ -102,8 +119,6 @@ function fieldError(field: string, message: string): string | undefined {
 }
 
 const validationMessages = new Map(Object.entries({
-  'must not be blank': 'Заповніть це поле.',
-  'must not be null': 'Заповніть це поле.',
   'must be a well-formed email address': 'Введіть коректну електронну адресу.',
   'must be a 6-digit code': 'Введіть шість цифр із листа.',
   'passwords do not match': passwordsMismatch,

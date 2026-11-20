@@ -89,6 +89,23 @@ describe('backend error and history responses', () => {
     expect(await message()).toBe('Запитані дані не знайдено.');
   });
 
+  it.each(['must not be blank', 'не должно быть пустым'])(
+    'localizes the combined registration validation error (%s)',
+    async (confirmationMessage) => {
+      const { request, errorMessage } = await import('../src/api/client');
+      vi.stubGlobal('fetch', vi.fn(async () => response({
+        detail: 'Validation failed',
+        errors: {
+          phone: 'must be in international format, e.g. +380671234567',
+          confirmPassword: confirmationMessage,
+        },
+      }, 400)));
+      await expect(request('/auth/register').catch(errorMessage)).resolves.toBe(
+        'Введіть номер телефону в міжнародному форматі, наприклад +380671234567. Повторіть пароль.',
+      );
+    },
+  );
+
   it('shows the phone format hint without the API field name or English validation detail', async () => {
     const { errorMessage, storeTokens } = await import('../src/api/client');
     const { api } = await import('../src/api');

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react';
 import assets from '../assets.json';
+import { requiredFieldMessage } from '../api/errors';
 
 export function Icon({ name }: { name: keyof typeof assets }) { return <img className="icon" src={assets[name]} alt="" aria-hidden="true" />; }
 const logoLayers: [keyof typeof assets, number, number][] = [
@@ -19,7 +20,7 @@ export const ukrainianFormValidation = {
 
     const { validity } = field;
     let message = 'Перевірте значення в цьому полі.';
-    if (validity.valueMissing) message = field instanceof HTMLSelectElement ? 'Оберіть варіант.' : 'Заповніть це поле.';
+    if (validity.valueMissing) message = field instanceof HTMLSelectElement ? 'Оберіть варіант.' : requiredFieldMessage(field.name);
     else if (validity.typeMismatch && field.type === 'email') message = 'Введіть коректну адресу електронної пошти.';
     else if (validity.patternMismatch && field.name === 'code') message = 'Введіть шість цифр із листа.';
     else if (validity.tooShort && field instanceof HTMLInputElement) message = `Введіть щонайменше ${field.minLength} символів.`;

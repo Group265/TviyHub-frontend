@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { errorMessage, passwordsMismatch, phoneFormatError } from '../api/errors';
+import { errorMessage, passwordsMismatch, phoneFormatError, requiredFieldMessage } from '../api/errors';
 import { Alert, Modal, ukrainianFormValidation } from './ui';
 
 export function AuthModal({ onClose, onLogin, initial = 'login', email: initialEmail = '' }: { onClose: () => void; onLogin: () => Promise<void>; initial?: 'login' | 'verify'; email?: string }) {
@@ -11,7 +11,9 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
   const [message,setMessage] = useState('');
   const [resendAt,setResendAt] = useState(0);
   const confirmationErrorId = useId();
-  const confirmationError = error === passwordsMismatch;
+  const hasConfirmation = mode === 'register' || mode === 'reset';
+  const confirmationField = mode === 'reset' ? 'confirmNewPassword' : 'confirmPassword';
+  const confirmationError = hasConfirmation && (error === passwordsMismatch || error === requiredFieldMessage(confirmationField));
   const clearConfirmationError = () => {
     if (confirmationError) setError('');
   };
@@ -21,9 +23,13 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
     const form = new FormData(e.currentTarget);
     const value = (key: string) => String(form.get(key) || '').trim();
     const password = String(form.get('password') ?? '');
-    const confirmation = String(form.get('confirmation') ?? '');
+    const confirmation = String(form.get(confirmationField) ?? '');
     try {
-      if ((mode === 'register' || mode === 'reset') && password !== confirmation) {
+      if (hasConfirmation && !confirmation.trim()) {
+        setError(requiredFieldMessage(confirmationField));
+        return;
+      }
+      if (hasConfirmation && password !== confirmation) {
         setError(passwordsMismatch);
         return;
       }
@@ -78,17 +84,17 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
       <label>Пошта<input name="email" type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Адреса електронної пошти" /></label>
       {(mode==='verify'||mode==='reset') && <label>Код із листа<input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="000000" /></label>}
       {(mode==='login'||mode==='register'||mode==='reset') && <label>{mode==='reset'?'Новий пароль':'Пароль'}<input name="password" type="password" required minLength={mode==='login'?1:8} maxLength={mode==='login'?undefined:72} onChange={clearConfirmationError} autoComplete={mode==='login'?'current-password':'new-password'} placeholder="••••••••" /></label>}
-      {(mode==='register'||mode==='reset') && <div>
+      {hasConfirmation && <div>
         <label>
-          {mode==='reset'?'Підтвердження нового пароля':'Підтвердження пароля'}
+          {mode==='reset'?'Підтвердження нового пароля':'Повторіть пароль'}
           <input
-            name="confirmation" type="password" required maxLength={72} autoComplete="new-password"
+            name={confirmationField} type="password" required minLength={8} maxLength={72} autoComplete="new-password"
             aria-invalid={confirmationError || undefined}
             aria-describedby={confirmationError ? confirmationErrorId : undefined}
             onChange={clearConfirmationError}
           />
         </label>
-        {confirmationError && <p id={confirmationErrorId} className="danger" role="alert">{passwordsMismatch}</p>}
+        {confirmationError && <p id={confirmationErrorId} className="danger" role="alert">{error}</p>}
       </div>}
       {mode==='login' && <button className="text-button align-right" type="button" onClick={()=>change('forgot')}>Забули пароль?</button>}
       <button className="btn full" disabled={busy}>{busy?'Зачекайте…':({login:'Увійти',register:'Зареєструватися',verify:'Підтвердити пошту',forgot:'Надіслати код',reset:'Змінити пароль'})[mode]}</button>
