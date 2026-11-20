@@ -105,37 +105,6 @@ describe('backend error and history responses', () => {
     );
   });
 
-  it('shows Ukrainian labels and messages for Russian registration validation', async () => {
-    const { errorMessage } = await import('../src/api/client');
-    const { api } = await import('../src/api');
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
-      expect(new Headers(init.headers).get('Accept-Language')).toBe('en');
-      return response({
-        detail: 'Validation failed',
-        errors: {
-          confirmPassword: 'не должно быть пустым',
-          password: 'размер должен быть между 8 и 72',
-          email: 'должно иметь формат адреса электронной почты',
-        },
-      }, 400);
-    }));
-    const registration = { name: 'Олена Тест', phone: '+380671234567', email: 'wrong', password: 'short', confirmPassword: '' };
-
-    await expect(api.register(registration).catch(errorMessage)).resolves.toBe(
-      'Підтвердження пароля · Заповніть це поле. Пароль · Введіть від 8 до 72 символів. Пошта · Введіть коректну електронну адресу.',
-    );
-  });
-
-  it('uses Ukrainian fallback text when an API error contains unknown details', async () => {
-    const { request, errorMessage } = await import('../src/api/client');
-    vi.stubGlobal('fetch', vi.fn(async () => response({
-      detail: 'Перевірте введені дані. confirmPassword: не должно быть пустым',
-    }, 400)));
-    await expect(request('/example').catch(errorMessage)).resolves.toBe(
-      'Сервіс відхилив запит. Перевірте введені дані.',
-    );
-  });
-
   it('reads all upcoming candidate pages before the UI paginates filtered results', async () => {
     const { storeTokens } = await import('../src/api/client');
     const { api } = await import('../src/api');

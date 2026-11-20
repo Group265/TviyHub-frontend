@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { errorMessage, passwordsMismatch, phoneFormatError } from '../api/errors';
-import { Alert, Modal, formValidationError } from './ui';
+import { Alert, Modal, ukrainianFormValidation } from './ui';
 
 export function AuthModal({ onClose, onLogin, initial = 'login', email: initialEmail = '' }: { onClose: () => void; onLogin: () => Promise<void>; initial?: 'login' | 'verify'; email?: string }) {
   const [mode,setMode] = useState<'login' | 'register' | 'verify' | 'forgot' | 'reset'>(initial);
@@ -17,13 +17,7 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
   };
   const change = (next: typeof mode) => { setMode(next);setError('');setMessage(''); };
   async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (busy) return;
-    setMessage('');
-    const validationError = formValidationError(e.currentTarget);
-    setError(validationError);
-    if (validationError) return;
-    setBusy(true);
+    e.preventDefault();if(busy)return;setBusy(true);setError('');setMessage('');
     const form = new FormData(e.currentTarget);
     const value = (key: string) => String(form.get(key) || '').trim();
     const password = String(form.get('password') ?? '');
@@ -79,7 +73,7 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
     <p className="muted">Увійдіть, щоб керувати бронюваннями.</p>
     {(mode==='login'||mode==='register') && <div className="tabs" role="tablist" aria-label="Вхід або реєстрація"><button role="tab" aria-selected={mode==='login'} className={mode==='login'?'active':''} onClick={()=>change('login')}>Увійти</button><button role="tab" aria-selected={mode==='register'} className={mode==='register'?'active':''} onClick={()=>change('register')}>Реєстрація</button></div>}
     {error && !confirmationError && <Alert>{error}</Alert>}{message && <Alert success>{message}</Alert>}
-    <form noValidate onSubmit={submit} className="form" key={mode}>
+    <form {...ukrainianFormValidation} onSubmit={submit} className="form" key={mode}>
       {mode==='register' && <><div className="form-row"><label>Ім’я<input name="first" required maxLength={50} autoComplete="given-name" placeholder="Марія..." /></label><label>Прізвище<input name="last" required maxLength={49} autoComplete="family-name" placeholder="Коваленко..." /></label></div><label>Номер телефону<input name="phone" required type="tel" autoComplete="tel" placeholder="+380..." /></label></>}
       <label>Пошта<input name="email" type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Адреса електронної пошти" /></label>
       {(mode==='verify'||mode==='reset') && <label>Код із листа<input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="000000" /></label>}

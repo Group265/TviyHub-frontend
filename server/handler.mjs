@@ -12,7 +12,7 @@ export default {
       target.pathname = incoming.pathname;
       target.search = incoming.search;
       const headers = new Headers();
-      for (const name of ['Accept','Accept-Language','Content-Type','Authorization']) {
+      for (const name of ['Accept','Content-Type','Authorization']) {
         const value = request.headers.get(name); if(value) headers.set(name,value);
       }
       // The browser calls its own origin. This separate upstream request must
