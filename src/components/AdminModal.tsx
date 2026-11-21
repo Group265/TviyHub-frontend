@@ -227,7 +227,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
         </tr>)}</tbody>
       </table></div> : <p className="empty">Користувачів не знайдено.</p> :
       visibleBookings.length ? <div className="table-scroll"><table>
-        <thead><tr><th>Дата / час</th><th>Клієнт</th><th>Ресурс / тариф</th><th>Сума</th><th>Статус</th><th>Оплата</th><th>Дії</th></tr></thead>
+        <thead><tr><th scope="col">№ бронювання</th><th>Дата / час</th><th>Клієнт</th><th>Ресурс / тариф</th><th>Сума</th><th>Статус</th><th>Оплата</th><th>Дії</th></tr></thead>
         <tbody>{visibleBookings.map(booking => {
           const payment = bookingPayments.get(booking.id);
           const workspace = workspaces.find(item => item.id === booking.workspaceId);
@@ -235,6 +235,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
           const statusClass = status === 'CANCELLED' ? 'cancelled' : status === 'COMPLETED' ? 'completed' : '';
           const canRecordPayment = payment?.status === 'UNPAID' && payment.paymentMethod !== 'STRIPE' && canCancelBooking(booking, now);
           return <tr key={booking.id}>
+            <td>№{booking.id}</td>
             <td>{booking.bookingDate}<small>{booking.startTime?.slice(0, 5)}–{booking.endTime?.slice(0, 5)}</small></td>
             <td>{clientName(booking, clients)}<small>{clients[booking.userId]?.phone}</small></td>
             <td>{displayWorkspace(workspace ?? { id: booking.workspaceId, name: booking.workspaceName ?? '' })}<small>{bookingTypeText(booking.bookingType)}</small></td>
