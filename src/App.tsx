@@ -9,6 +9,8 @@ import { AuthModal } from './components/AuthModal';
 import { BookingModal } from './components/BookingModal';
 import { ProfileModal } from './components/ProfileModal';
 import { AdminModal } from './components/AdminModal';
+import { PaymentReturn } from './components/PaymentReturn';
+import { myBookingsPath, paymentSuccessPath } from './checkout';
 import { useVenueClock } from './useVenueClock';
 
 const plans: { title: string; label: string; type: BookingType; workspaceType: 'DESK'|'MEETING_ROOM'; reference: number; unit: string; features: string[] }[] = [
@@ -20,6 +22,9 @@ const plans: { title: string; label: string; type: BookingType; workspaceType: '
 const nav = [['services','Послуги'],['booking','Бронювання'],['advantages','Переваги'],['pricing','Тарифи'],['location','Розташування']];
 type Selected = { workspace?: Workspace; type: BookingType; date: string; start: string; hours: number };
 export default function App() {
+  const path = location.pathname.replace(/\/$/, '');
+  const paymentPage = path === paymentSuccessPath;
+  const bookingsPage = path === myBookingsPath;
   const [user,setUser]=useState<User|null>(null);
   const [authLoading,setAuthLoading]=useState(hasSession());
   const [sessionError,setSessionError]=useState('');
@@ -94,11 +99,40 @@ export default function App() {
     return <button key={workspace?.id??`placeholder-${index}`} className={`desk ${free===true?'free':free===false?'occupied':'unknown'}`} style={{gridArea:index<6?`desk${index+1}`:undefined}} disabled={!workspace||free===false||checking||!!validation} onClick={()=>workspace&&choose(workspace)} aria-label={`${workspace?displayWorkspace(workspace):`Робоче місце №${index+1}`}: ${free===true?'вільний':free===false?'недоступний':'обрати місце'}`}><span className="desk-number">{index+1}</span><strong>{workspace?displayWorkspace(workspace):`Робоче місце №${index+1}`}</strong><small>{checking?'Перевіряємо':free===true?'Вільний':free===false?'Недоступний':!workspace?'Немає даних':'Обрати місце'}</small></button>;
   }
   const roomFree=room?availability.find(w=>w.id===room.id)?.isAvailable:undefined;
+  const authDialog = auth && <AuthModal initial={auth} email={auth === 'verify' ? user?.email : ''} onClose={() => { setAuth(null); setPending(null); }} onLogin={loggedIn} />;
+  const bookingDialog = selected && user && <BookingModal {...selected} workspaces={workspaces} initialType={selected.type} initialDate={selected.date} initialStart={selected.start} initialHours={selected.hours} user={user} tariffs={tariffs} onClose={() => setSelected(null)} onCreated={() => setRevision(value => value + 1)} />;
+  const profileView = user && <ProfileModal standalone={bookingsPage} user={user}
+    onUser={setUser} onLogoutError={setSessionError} onClose={() => setProfile(false)}
+    onVerify={() => { setProfile(false); setAuth('verify'); }}
+    onRepeat={(workspace: Workspace, item: HistoryItem) => {
+      setProfile(false);
+      const hours = item.startTime && item.endTime
+        ? Math.min(4, Math.max(1, Number(item.endTime.slice(0, 2)) - Number(item.startTime.slice(0, 2)))) : 1;
+      choose(workspace, item.bookingType, { ...nextBookingSlot(), hours });
+    }} />;
+  if (paymentPage || bookingsPage) {
+    return <>
+      <header className="container header"><Logo href="/" /><a className="btn outline small" href="/">На головну</a></header>
+      <main className={'container checkout-page' + (paymentPage ? ' checkout-result' : '')}>
+        <h1>{paymentPage ? 'Результат оплати' : 'Мої бронювання'}</h1>
+        {sessionError && <Alert>{sessionError}</Alert>}
+        {paymentPage ? <>
+          <PaymentReturn user={user} authLoading={authLoading} onLogin={() => setAuth('login')} dedicated />
+          <a className="btn outline" href={myBookingsPath}>Мої бронювання</a>
+        </> : user ? profileView : authLoading
+          ? <p role="status">Завантажуємо профіль…</p>
+          : <p><button className="text-button" onClick={() => setAuth('login')}>Увійдіть</button>, щоб переглянути бронювання.</p>}
+      </main>
+      {authDialog}
+      {bookingDialog}
+    </>;
+  }
   return <>
     <a className="skip" href="#main">Перейти до вмісту</a>
     <header className="container header" id="home"><Logo/><button className="mobile-menu btn outline small" aria-label="Відкрити меню" aria-expanded={mobileNav} onClick={()=>setMobileNav(v=>!v)}>Меню</button><nav className={mobileNav?'expanded':''} aria-label="Головна навігація">{navLinks}</nav><div className="header-actions">{user?.role==='ADMIN'&&<button className="btn outline small" onClick={()=>setAdmin(true)}>Адмін-панель</button>}<button className="btn outline small" disabled={authLoading} onClick={()=>user?setProfile(true):setAuth('login')}>{authLoading?'Зачекайте…':user?'Мій профіль':'Увійти'}</button></div></header>
     <main id="main" className="container">
       {sessionError && <Alert>{sessionError}</Alert>}
+      <PaymentReturn user={user} authLoading={authLoading} onLogin={() => setAuth('login')} />
       <section className="hero" aria-labelledby="hero-title"><h1 id="hero-title">Твій хаб — простір для твоїх ідей!</h1><p>Сучасний коворкінг із домашнім затишком. Гарантований інтернет, безперебійне світло та спільнота, з якою рости приємніше.</p><div className="hero-actions"><a className="btn" href="#booking">Забронювати місце<Icon name="imgIconCalendar2"/></a><a className="btn outline" href="#services">Оглянути приміщення</a></div><div className="hero-image"><img src={assets.imgImageContainer1} alt="Затишний спільний робочий простір Твій хаб" fetchPriority="high"/></div></section>
       <section id="services"><SectionTitle title="Наші послуги" description="У нас є 2 комфортні зони для ваших завдань — для глибокого фокусу або важливих переговорів."/><div className="services-grid">
         <article className="service-card"><div className="service-image meeting-image"><img src={assets.imgImageContainer} alt="Команда за столом у приватній переговорній" loading="lazy"/></div><h3>Окрема переговорна кімната</h3><p>Простір для проведення онлайн-зустрічей, переговорів з клієнтами, командних обговорень та презентацій.</p><ul className="checks"><li><Icon name="imgIconCheck"/>Приватність</li><li><Icon name="imgIconCheck"/>Розетки</li></ul><div className="card-bottom"><div><small>{tariffs.length?'Вартість':'Орієнтовна вартість'}</small><strong>{money(price('MEETING_ROOM','HOURLY',200))}<small> / година</small></strong></div><button className="btn" onClick={()=>planChoice('HOURLY','MEETING_ROOM')}>Забронювати<Icon name="imgIconCalendar"/></button></div></article>
@@ -119,9 +153,9 @@ export default function App() {
       <section id="location"><SectionTitle title="Де нас знайти?"/><div className="location-grid"><div className="contacts"><div><span className="contact-icon"><Icon name="imgIconLocation"/></span><div><h4>Адреса</h4><p>м. Миколаїв, вул. Олексія Вадатурського, 1</p></div></div><div><span className="contact-icon"><Icon name="imgGroup3"/></span><div><h4>Графік роботи</h4><p>Пн–Пт 09:00–19:00.<br/>Субота та неділя — вихідні.</p></div></div><div><span className="contact-icon"><Icon name="imgIconPhone"/></span><div><h4>Контакти</h4><a href="tel:+380998710595">+380 99 871 0595</a></div></div></div><div className="location-map"><iframe title="Твій хаб на карті — Миколаїв, вул. Олексія Вадатурського, 1" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2722.2252615539714!2d31.989338599999996!3d46.976910000000004!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40c5c9396fa069b3%3A0x4f2d8be6a025fb9f!2s%D0%A2%D0%B2%D1%96%D0%B9%20%D1%85%D0%B0%D0%B1%20%E2%80%94%20%D0%BC%D1%96%D0%BD%D1%96%D0%BA%D0%BE%D0%B2%D0%BE%D1%80%D0%BA%D1%96%D0%BD%D0%B3!5e0!3m2!1suk!2sua!4v1794827457765!5m2!1suk!2sua&amp;hl=uk" loading="lazy" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"/><a className="map-link" href="https://www.google.com/maps/search/?api=1&amp;hl=uk&amp;query=Миколаїв%20Олексія%20Вадатурського%201" target="_blank" rel="noreferrer">Відкрити на карті ↗</a></div></div></section>
     </main>
     <footer><div className="container"><div className="footer-top"><Logo/><nav aria-label="Нижня навігація">{nav.filter(([id])=>id!=='booking').map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}</nav><div className="footer-contact"><span><Icon name="imgIconLocation1"/>м. Миколаїв, вул. Олексія Вадатурського, 1</span><a href="tel:+380998710595"><Icon name="imgIconPhone1"/>+380 99 871 0595</a></div></div><div className="footer-bottom"><span>© 2026 Твій хаб. Всі права захищено.</span><button className="text-button muted" onClick={()=>setPrivacy(true)}>Політика конфіденційності</button></div></div></footer>
-    {auth&&<AuthModal initial={auth} email={auth==='verify'?user?.email:''} onClose={()=>{setAuth(null);setPending(null);}} onLogin={loggedIn}/>}
-    {selected&&user&&<BookingModal {...selected} workspaces={workspaces} initialType={selected.type} initialDate={selected.date} initialStart={selected.start} initialHours={selected.hours} user={user} tariffs={tariffs} onClose={()=>setSelected(null)} onCreated={()=>setRevision(v=>v+1)}/>}
-    {profile&&user&&<ProfileModal user={user} onUser={setUser} onLogoutError={setSessionError} onClose={()=>setProfile(false)} onVerify={()=>{setProfile(false);setAuth('verify');}} onRepeat={(workspace:Workspace,item:HistoryItem)=>{setProfile(false);choose(workspace,item.bookingType,{...nextBookingSlot(),hours:item.startTime&&item.endTime?Math.min(4,Math.max(1,Number(item.endTime.slice(0,2))-Number(item.startTime.slice(0,2)))):1});}}/>}
+    {authDialog}
+    {bookingDialog}
+    {profile && profileView}
     {admin&&user?.role==='ADMIN'&&<AdminModal userId={user.id} workspaces={workspaces} onClose={()=>setAdmin(false)} onChanged={()=>setRevision(v=>v+1)}/>}
     {privacy&&<Modal title="Політика конфіденційності" onClose={()=>setPrivacy(false)}><p>Для входу та бронювання введені вами дані передаються сервісу Твій хаб. Дані для входу зберігаються лише у відкритій вкладці й видаляються під час виходу з облікового запису.</p><p>Історія бронювань завантажується з вашого облікового запису. За інформацією щодо обробки даних звертайтеся до адміністратора простору.</p></Modal>}
   </>;

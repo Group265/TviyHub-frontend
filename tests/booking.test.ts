@@ -1,9 +1,22 @@
 import { describe,it,expect,vi,afterEach } from 'vitest';
 import {
-  bookingDisplayStatus, bookingPayload, bookingTypeText, bookingValidation, canCancelBooking, displayWorkspace, isCurrentSubscription,
+  bookingDisplayStatus, bookingPayload, bookingPaymentWindow, bookingTypeText, bookingValidation, canCancelBooking, displayWorkspace, isCurrentSubscription,
   isUpcomingBooking, nextBookingSlot, nextWorkingDay, roleText, statusText, venueDateTime, venueToday,
 } from '../src/booking';
 afterEach(()=>vi.useRealTimers());
+describe('booking payment deadline', () => {
+  const booking = { bookingDate: '2026-11-25', startTime: '10:00' };
+
+  it('uses the earlier of the start and the Kyiv creation time plus 24 hours', () => {
+    expect(bookingPaymentWindow({ ...booking, createdAt: '2026-11-23T23:15:42' }).deadline).toBe('2026-11-24T23:15:42');
+    expect(bookingPaymentWindow({ ...booking, createdAt: '2026-11-24T18:15:42Z' }).deadline).toBe('2026-11-25T10:00:00');
+  });
+
+  it('uses an explicit deadline and leaves the exact limit unknown without server data', () => {
+    expect(bookingPaymentWindow({ ...booking, paymentDeadline: '2026-11-25T07:30:00Z', createdAt: '2026-11-21T10:00:00' }).deadline).toBe('2026-11-25T09:30:00');
+    expect(bookingPaymentWindow({ ...booking, startTime: null })).toEqual({ deadline: null, start: '2026-11-25T09:00:00' });
+  });
+});
 describe('booking date and backend rules',()=>{
   it('keeps the Kyiv venue date at UTC midnight boundaries',()=>{expect(venueToday(new Date('2026-11-16T22:30:00Z'))).toBe('2026-11-17');expect(venueToday(new Date('2026-07-16T21:30:00Z'))).toBe('2026-07-17');});
   it('rejects weekends, past dates and invalid hourly slots without changing backend rules',()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-16T10:00:00Z'));expect(bookingValidation('2026-11-15','10:00',1,'HOURLY')).toBeTruthy();expect(bookingValidation('2026-11-21','10:00',1,'HOURLY')).toBeTruthy();expect(bookingValidation('2026-11-17','18:00',2,'HOURLY')).toBeTruthy();expect(bookingValidation('2026-11-17','09:30',1,'HOURLY')).toBeTruthy();expect(bookingValidation('2026-11-17','15:00',4,'HOURLY')).toBeNull();});

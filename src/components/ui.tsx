@@ -6,8 +6,8 @@ export function Icon({ name }: { name: keyof typeof assets }) { return <img clas
 const logoLayers: [keyof typeof assets, number, number][] = [
   ['imgVector',32.38,0],['imgVector1',13.64,1.9],['imgVector2',4.09,8.6],['imgVector3',53.76,21.28],['imgVector4',60.9,36.32],['imgVector5',24.44,20.06],['imgVector6',56.91,27.76],['imgVector7',70.29,33.98],['imgVector8',64.86,38.25],
 ];
-export function Logo() {
-  return <a href="#home" className="logo" aria-label="Твій хаб — на початок">
+export function Logo({ href = '#home' }: { href?: string } = {}) {
+  return <a href={href} className="logo" aria-label="Твій хаб — на початок">
     {logoLayers.map(([name,left,top]) => <img key={name} src={assets[name]} alt="" style={{left,top}} />)}
     <span className="logo-wordmark" aria-hidden="true"><span>Твій</span> хаб</span>
   </a>;

@@ -28,6 +28,33 @@ function bookingDateTime(date: string, time: string): string {
   return `${date}T${time.length === 5 ? `${time}:00` : time}`;
 }
 
+function kyivTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const local = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value);
+  if (local) {
+    const asUtc = new Date(value + 'Z');
+    return Number.isFinite(asUtc.getTime()) ? asUtc.toISOString().slice(0, 19) : null;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) return null;
+  const instant = new Date(value);
+  return Number.isFinite(instant.getTime()) ? venueDateTime(instant) : null;
+}
+
+type PaymentSchedule = Pick<HistoryItem, 'bookingDate' | 'startTime' | 'createdAt' | 'paymentDeadline'>;
+
+export function bookingPaymentWindow(booking: PaymentSchedule) {
+  const start = bookingDateTime(booking.bookingDate, booking.startTime ?? bookingOpenTime).slice(0, 19);
+  const created = kyivTimestamp(booking.createdAt);
+  const deadline = kyivTimestamp(booking.paymentDeadline) ??
+    (created ? new Date(Date.parse(created + 'Z') + 86400000).toISOString().slice(0, 19) : null);
+  return { start, deadline: deadline === null ? null : deadline < start ? deadline : start };
+}
+
+export function paymentDeadlineText(deadline: string): string {
+  const [date, time] = deadline.split('T');
+  return `Сплатіть до ${date.split('-').reverse().join('.')} о ${time.endsWith(':00') ? time.slice(0, 5) : time} за часом Києва.`;
+}
+
 export function bookingDisplayStatus(booking: BookingSchedule, now: string): string {
   return booking.status === 'CONFIRMED' && bookingDateTime(booking.bookingDate, booking.endTime ?? bookingCloseTime) <= now
     ? 'COMPLETED'
@@ -39,7 +66,8 @@ export function isUpcomingBooking(booking: BookingSchedule, now: string): boolea
 }
 
 export function canCancelBooking(booking: BookingSchedule, now: string): boolean {
-  return booking.status === 'CONFIRMED' && bookingDateTime(booking.bookingDate, booking.startTime ?? bookingOpenTime) > now;
+  const canCancelStatus = booking.status === 'CONFIRMED' || booking.status === 'PENDING_PAYMENT';
+  return canCancelStatus && bookingDateTime(booking.bookingDate, booking.startTime ?? bookingOpenTime) > now;
 }
 
 export function isCurrentSubscription(subscription: Pick<Subscription, 'status' | 'endDate'>, today: string): boolean {

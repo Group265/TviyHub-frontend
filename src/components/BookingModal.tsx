@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { errorMessage, isBookingAvailabilityConflict, isUnconfirmedWrite } from '../api/errors';
 import type { BookingType, Tariff, User, Workspace } from '../api/types';
-import { bookingPayload, bookingValidation, displayWorkspace, endTime, money, nextBookingSlot, nextWorkingDay, venueToday } from '../booking';
+import { bookingPayload, bookingPaymentWindow, bookingValidation, displayWorkspace, endTime, money, nextBookingSlot, nextWorkingDay, paymentDeadlineText, statusText, venueDateTime, venueToday } from '../booking';
+import { getPaymentId, myBookingsPath, startCheckout } from '../checkout';
 import { Alert, Icon, Modal, ukrainianFormValidation } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
@@ -31,6 +32,8 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
+  const [payment,setPayment] = useState<{ ids: number[]; amount: number; deadline: string | null; latest: string | null } | null>(null);
+  const [payAtDesk,setPayAtDesk] = useState(false);
   const [retry,setRetry]=useState(0);
   const now=useVenueClock();
   const choices=workspaces.filter(w=>type==='HOURLY'||w.type==='DESK');
@@ -75,14 +78,27 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
     try {
       if(type==='SUBSCRIPTION') {
         const result=await api.subscribe(workspace.id,date);
-        setSuccess(`${displayWorkspace(workspace)} утримується з ${result.startDate} до ${result.endDate}. Абонемент очікує оплати. Для підтвердження зверніться до адміністратора протягом 24 годин.`);
+        const id = getPaymentId(result);
+        setPayment({ ids: id ? [id] : [], amount: price, deadline: null, latest: null });
+        setSuccess(`Абонемент №${result.id}: ${displayWorkspace(workspace)}, з ${result.startDate} до ${result.endDate}. ${statusText(result.status)}. Місце утримується до 24 годин.`);
       } else {
         const created=await api.book(payload);
         if (!Array.isArray(created) || !created.length) {
           setError('Сервер не підтвердив створення бронювання. Перевірте історію перед повторною спробою.');
           return;
         }
-        setSuccess(`Бронювання №${created[0].id} підтверджено: ${displayWorkspace(workspace)}. ${date}, ${type==='DAILY'?'09:00–19:00':`${start}–${endTime(start,hours)}`}. До сплати: ${money(created[0].totalPrice)}. Оплата адміністратору.`);
+        const unpaid = created.filter(booking => booking.paymentStatus !== 'PAID');
+        if (unpaid.length) {
+          const ids = unpaid.map(getPaymentId).filter(id => id !== null);
+          const windows = unpaid.map(bookingPaymentWindow);
+          const deadline = windows.every(window => window.deadline) ? windows.map(window => window.deadline!).sort()[0] : null;
+          const latest = windows.map(window => window.deadline ?? window.start).sort()[0];
+          setPayment({ ids: ids.length === unpaid.length ? ids : [], amount: unpaid.reduce((sum, booking) => sum + Number(booking.totalPrice), 0), deadline, latest });
+        }
+        const booking = created[0];
+        setSuccess(created.length === 1
+          ? `Бронювання №${booking.id}: ${displayWorkspace(workspace)}. ${date}, ${type==='DAILY'?'09:00–19:00':`${start}–${endTime(start,hours)}`}. ${statusText(booking.status)}.`
+          : `Створено бронювання №${created.map(item => item.id).join(', №')}.`);
       }
       onCreated();
     } catch (err) {
@@ -98,10 +114,41 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
     }
     finally{setBusy(false);}
   }
+  const canPayOnline = user.role === 'USER' && !!payment?.ids.length && (!payment.latest || payment.latest > venueDateTime(now));
+  async function payOnline() {
+    if (!canPayOnline || busy || !payment || (payment.latest && payment.latest <= venueDateTime())) return;
+    setBusy(true);
+    setError('');
+    try {
+      location.assign(await startCheckout(payment.ids, user.id, type === 'SUBSCRIPTION' ? 'single' : 'batch'));
+    } catch (err) {
+      setError(`Не вдалося відкрити сторінку оплати. ${errorMessage(err, 'Спробуйте ще раз.')}`);
+      setBusy(false);
+    }
+  }
   const monthlyTariff=tariffs.find(t=>t.workspaceType==='DESK'&&t.bookingType==='SUBSCRIPTION');
-  return <Modal title="Бронювання місця" onClose={onClose}>
+  return <Modal title={success && payment ? 'Спосіб оплати' : 'Бронювання місця'} onClose={() => { if (!busy) onClose(); }}>
     <p className="eyebrow">Оформлення бронювання · час Києва</p>
-    {success?<><Alert success>{success}</Alert><button className="btn full" onClick={onClose}>Готово</button></>:<>
+    {success ? <>
+      <Alert success>{success}</Alert>
+      {payment && payAtDesk ? <div className="form">
+        <Alert>{payment.deadline ? paymentDeadlineText(payment.deadline) : type === 'SUBSCRIPTION'
+          ? 'Сплатіть у адміністратора протягом 24 годин.'
+          : 'Сплатіть у адміністратора протягом 24 годин після створення бронювання, але не пізніше його початку.'}</Alert>
+        <div className="actions"><a className="btn outline" href={myBookingsPath}>Мої бронювання</a><button className="btn" onClick={onClose}>Готово</button></div>
+      </div> : payment ? <div className="form">
+        <div className="booking-total"><div><small>Разом до сплати</small><strong>{money(payment.amount)}</strong></div></div>
+        {error && <Alert>{error}</Alert>}
+        {user.role === 'USER' && <>
+          <button type="button" className="btn full" disabled={busy || !canPayOnline} onClick={payOnline}>
+            {busy ? 'Відкриваємо оплату…' : 'Оплатити онлайн (Stripe)'}
+          </button>
+          {!canPayOnline && <p className="muted">Онлайн-оплата для цього замовлення недоступна.</p>}
+        </>}
+        <button type="button" className="btn outline full" onClick={() => { setError(''); setPayAtDesk(true); }} disabled={busy}>Оплатити адміністратору</button>
+        <p className="muted">{type === 'SUBSCRIPTION' ? 'Для підтвердження зверніться до адміністратора протягом 24 годин.' : 'Готівкою або карткою через термінал.'}</p>
+      </div> : <button className="btn full" onClick={onClose}>Готово</button>}
+    </> : <>
       <form {...ukrainianFormValidation} className="form" onSubmit={submit}>
         <label>Місце для бронювання<select required disabled={busy} value={workspace?.id??''} onChange={e=>setWorkspaceId(Number(e.target.value))}>
           <option value="" disabled>{type==='HOURLY'?'Оберіть стіл або переговорну':'Оберіть стіл'}</option>
@@ -118,7 +165,7 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
         {validation&&<Alert>{validation}{type==='HOURLY'&&<> <button type="button" disabled={busy} className="text-button" onClick={()=>{const slot=nextBookingSlot();setDate(slot.date);setStart(slot.start);setHours(1);}}>Обрати найближчий час</button></>}</Alert>}{error&&<Alert>{error}</Alert>}
         {!workspace&&<p className="muted" role="status">Оберіть місце зі списку, щоб перевірити наявність і вартість.</p>}
         {available===false&&!error&&<Alert>Місце недоступне у вибраний час. Оберіть інше місце, дату або час.</Alert>}
-        <div className="booking-total"><div><small>Разом до сплати:</small><strong>{checking?'Уточнюємо…':price===null?'—':money(price)}</strong></div><span className="pill">Оплата адміністратору</span></div>
+        <div className="booking-total"><div><small>Разом до сплати:</small><strong>{checking?'Уточнюємо…':price===null?'—':money(price)}</strong></div></div>
         <button className="btn full" disabled={!workspace||busy||checking||!!validation||price===null||(type!=='SUBSCRIPTION'&&available!==true)}>{busy?'Оформлюємо…':'Забронювати'}<Icon name="imgIconCalendar"/></button>
         {error&&type!=='SUBSCRIPTION'&&<button type="button" className="text-button" onClick={()=>setRetry(v=>v+1)}>Оновити доступність і вартість</button>}
       </form>

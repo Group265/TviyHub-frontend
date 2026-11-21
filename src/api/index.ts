@@ -1,5 +1,5 @@
 import { request, storeTokens } from './client';
-import type { AdminUser, Availability, Booking, BookingRequest, HistoryItem, Page, Payment, Subscription, Tariff, Tokens, User, Workspace } from './types';
+import type { AdminUser, Availability, Booking, BookingRequest, HistoryItem, InPersonPaymentMethod, Page, Payment, StripeBatchSession, StripeSession, Subscription, Tariff, Tokens, User, Workspace } from './types';
 export const HISTORY_PAGE_SIZE = 10;
 const UPCOMING_BATCH_SIZE = 100;
 
@@ -47,10 +47,32 @@ export const api = {
   },
   subscriptions: () => request<Subscription[]>('/subscriptions/my', {}, true),
   subscribe: (workspaceId: number, startDate: string) => request<Subscription>('/subscriptions', json('POST', { workspaceId, startDate }), true),
-  adminBookings: () => request<Booking[]>('/bookings', {}, true),
-  adminUsers: (page = 0, search = '') => request<Page<AdminUser>>(`/admin/users?page=${page}&size=10&search=${encodeURIComponent(search)}`, {}, true),
-  adminUser: (id: number) => request<AdminUser>(`/admin/users/${id}`, {}, true),
-  block: (id: number, blocked: boolean) => request<AdminUser>(`/admin/users/${id}/${blocked ? 'unblock' : 'block'}`, json('POST'), true),
-  adminPayments: () => request<Payment[]>('/admin/payments', {}, true),
-  updatePayment: (id: number) => request<Payment>(`/admin/payments/${id}/status`, json('PUT', { status: 'PAID', paymentMethod: 'CASH' }), true),
+  stripeSession: (paymentId: number, successUrl: string, cancelUrl: string) => {
+    const query = new URLSearchParams({ successUrl, cancelUrl });
+    return request<StripeSession>(`/payments/${paymentId}/stripe-session?${query}`, json('POST'), true);
+  },
+  stripeBatchSession: (paymentIds: number[], successUrl: string, cancelUrl: string) =>
+    request<StripeBatchSession>('/payments/stripe-session/batch', json('POST', { paymentIds, successUrl, cancelUrl }), true),
+  verifyStripePayment: (sessionId: string, signal?: AbortSignal) =>
+    request<Payment | Payment[] | { payments: Payment[] }>(`/payments/success?${new URLSearchParams({ session_id: sessionId })}`, { signal }, true),
+  bookings: (signal?: AbortSignal) => request<Booking[]>('/bookings', { signal }, true),
+  adminUsers: (page = 0, search = '', order: 'recent' | 'name' | 'id' = 'recent', signal?: AbortSignal, size = 10) => {
+    const sortBy = order === 'recent' ? 'createdAt' : order;
+    const query = new URLSearchParams({ page: String(page), size: String(size), search, sortBy, direction: order === 'recent' ? 'desc' : 'asc' });
+    return request<Page<AdminUser>>(`/admin/users?${query}`, { signal }, true);
+  },
+  async adminBookingClients(ids: number[], signal: AbortSignal) {
+    const remaining = new Set(ids);
+    const clients: AdminUser[] = [];
+    for (let page = 0, totalPages = 1; page < totalPages && remaining.size; page++) {
+      const result = await api.adminUsers(page, '', 'id', signal, 100);
+      clients.push(...result.content.filter(user => remaining.delete(user.id)));
+      totalPages = result.totalPages;
+    }
+    return clients;
+  },
+  setUserBlocked: (id: number, blocked: boolean) => request<AdminUser>(`/admin/users/${id}/${blocked ? 'block' : 'unblock'}`, json('POST'), true),
+  adminPayments: (signal?: AbortSignal) => request<Payment[]>('/admin/payments', { signal }, true),
+  updatePayment: (id: number, paymentMethod: InPersonPaymentMethod) =>
+    request<Payment>(`/admin/payments/${id}/status`, json('PUT', { status: 'PAID', paymentMethod }), true),
 };

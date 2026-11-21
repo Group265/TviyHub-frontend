@@ -17,7 +17,7 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
   const clearConfirmationError = () => {
     if (confirmationError) setError('');
   };
-  const change = (next: typeof mode) => { setMode(next);setError('');setMessage(''); };
+  const change = (next: typeof mode) => { if (!busy) { setMode(next);setError('');setMessage(''); } };
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();if(busy)return;setBusy(true);setError('');setMessage('');
     const form = new FormData(e.currentTarget);
@@ -75,9 +75,9 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
       setBusy(false);
     }
   }
-  return <Modal title={mode==='verify' ? 'Підтвердження пошти' : mode==='forgot'||mode==='reset' ? 'Відновлення пароля' : 'Вітаємо у просторі «Твій хаб»!'} onClose={onClose}>
+  return <Modal title={mode==='verify' ? 'Підтвердження пошти' : mode==='forgot'||mode==='reset' ? 'Відновлення пароля' : 'Вітаємо у просторі «Твій хаб»!'} onClose={() => { if (!busy) onClose(); }}>
     <p className="muted">Увійдіть, щоб керувати бронюваннями.</p>
-    {(mode==='login'||mode==='register') && <div className="tabs" role="tablist" aria-label="Вхід або реєстрація"><button role="tab" aria-selected={mode==='login'} className={mode==='login'?'active':''} onClick={()=>change('login')}>Увійти</button><button role="tab" aria-selected={mode==='register'} className={mode==='register'?'active':''} onClick={()=>change('register')}>Реєстрація</button></div>}
+    {(mode==='login'||mode==='register') && <div className="tabs" role="tablist" aria-label="Вхід або реєстрація"><button role="tab" disabled={busy} aria-selected={mode==='login'} className={mode==='login'?'active':''} onClick={()=>change('login')}>Увійти</button><button role="tab" disabled={busy} aria-selected={mode==='register'} className={mode==='register'?'active':''} onClick={()=>change('register')}>Реєстрація</button></div>}
     {error && !confirmationError && <Alert>{error}</Alert>}{message && <Alert success>{message}</Alert>}
     <form {...ukrainianFormValidation} onSubmit={submit} className="form" key={mode}>
       {mode==='register' && <><div className="form-row"><label>Ім’я<input name="first" required maxLength={50} autoComplete="given-name" placeholder="Марія..." /></label><label>Прізвище<input name="last" required maxLength={49} autoComplete="family-name" placeholder="Коваленко..." /></label></div><label>Номер телефону<input name="phone" required type="tel" autoComplete="tel" placeholder="+380..." /></label></>}
@@ -96,11 +96,11 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
         </label>
         {confirmationError && <p id={confirmationErrorId} className="danger" role="alert">{error}</p>}
       </div>}
-      {mode==='login' && <button className="text-button align-right" type="button" onClick={()=>change('forgot')}>Забули пароль?</button>}
+      {mode==='login' && <button className="text-button align-right" type="button" disabled={busy} onClick={()=>change('forgot')}>Забули пароль?</button>}
       <button className="btn full" disabled={busy}>{busy?'Зачекайте…':({login:'Увійти',register:'Зареєструватися',verify:'Підтвердити пошту',forgot:'Надіслати код',reset:'Змінити пароль'})[mode]}</button>
     </form>
     {mode==='verify' && <button type="button" disabled={busy} className="text-button centered" onClick={resend}>Надіслати код повторно</button>}
-    <button className="text-button centered muted" onClick={()=>change(mode==='login'?'register':'login')}>{mode==='login'?'Немає облікового запису? Зареєструватися':'Уже маєте обліковий запис? Увійти'}</button>
-    {mode==='login' && <button className="text-button centered muted" onClick={()=>change('verify')}>Підтвердити пошту кодом</button>}
+    <button className="text-button centered muted" disabled={busy} onClick={()=>change(mode==='login'?'register':'login')}>{mode==='login'?'Немає облікового запису? Зареєструватися':'Уже маєте обліковий запис? Увійти'}</button>
+    {mode==='login' && <button className="text-button centered muted" disabled={busy} onClick={()=>change('verify')}>Підтвердити пошту кодом</button>}
   </Modal>;
 }

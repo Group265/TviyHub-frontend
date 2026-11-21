@@ -170,3 +170,82 @@ describe('registration and email verification', () => {
     await expect(api.me()).resolves.toMatchObject({ emailVerified: true });
   });
 });
+
+describe('checkout and admin actions', () => {
+  it('sends the booking payment batch as JSON and uses both return routes', async () => {
+    const { storeTokens } = await import('../src/api/client');
+    const { startCheckout, pendingCheckout, getPaymentId } = await import('../src/checkout');
+    storeTokens(tokens());
+    vi.stubGlobal('location', { origin: 'https://hub.example' });
+    const checkout = 'https://checkout.stripe.com/c/pay/cs_test_example';
+    const fetcher = vi.fn(async (_url: string, _options: RequestInit) => response({ url: checkout }));
+    vi.stubGlobal('fetch', fetcher);
+    const ids = [getPaymentId({ paymentId: 52 }), getPaymentId({ payment: { id: 21 } })].filter(id => id !== null);
+    await expect(startCheckout(ids, 17)).resolves.toBe(checkout);
+    const [url, options] = fetcher.mock.calls[0];
+    expect(url).toBe('/api/payments/stripe-session/batch');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(String(options.body))).toEqual({
+      paymentIds: [21, 52],
+      successUrl: 'https://hub.example/payment/success',
+      cancelUrl: 'https://hub.example/my-bookings',
+    });
+    expect(pendingCheckout()).toMatchObject({ paymentIds: [21, 52], sessionId: 'cs_test_example', userId: 17 });
+    await expect(startCheckout(ids, 17)).resolves.toBe(checkout);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires paid status for every expected payment', async () => {
+    const { checkoutIsPaid } = await import('../src/checkout');
+    const payment = { amount: 100, bookingId: 2, subscriptionId: null, paymentMethod: 'STRIPE' };
+    const first = { ...payment, id: 20, status: 'PAID' };
+    const second = { ...payment, id: 23, status: 'UNPAID' };
+    expect(checkoutIsPaid([20, 23], first)).toBe(false);
+    expect(checkoutIsPaid([20, 23], [first, second])).toBe(false);
+    expect(checkoutIsPaid([20, 23], { payments: [first, { ...second, status: 'PAID' }] })).toBe(true);
+  });
+
+  it('passes Stripe return URLs and verifies the returned session through authenticated API calls', async () => {
+    const { api } = await import('../src/api');
+    const { storeTokens } = await import('../src/api/client');
+    storeTokens(tokens());
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer access-1');
+      return response({ id: 19, status: 'PAID' });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    await api.stripeSession(19, 'https://hub.example/', 'https://hub.example/?checkout=cancelled&payment_id=19');
+    await api.verifyStripePayment('cs_test_example');
+
+    const [checkout, options] = fetcher.mock.calls[0];
+    const url = new URL(checkout, 'https://hub.example');
+    expect(url.pathname).toBe('/api/payments/19/stripe-session');
+    expect(url.searchParams.get('successUrl')).toBe('https://hub.example/');
+    expect(url.searchParams.get('cancelUrl')).toBe('https://hub.example/?checkout=cancelled&payment_id=19');
+    expect(options.method).toBe('POST');
+    expect(fetcher.mock.calls[1][0]).toBe('/api/payments/success?session_id=cs_test_example');
+  });
+
+  it('sends the desired user status and records terminal payments as CARD', async () => {
+    const { api } = await import('../src/api');
+    const { storeTokens } = await import('../src/api/client');
+    storeTokens(tokens());
+    const fetcher = vi.fn(async (_url: string, _options: RequestInit) => response({}));
+    vi.stubGlobal('fetch', fetcher);
+    await api.setUserBlocked(12, true);
+    await api.setUserBlocked(12, false);
+    await api.updatePayment(19, 'CARD');
+    await api.adminUsers(1, 'тест +380', 'name');
+
+    expect(fetcher.mock.calls.slice(0, 3).map(([path, options]) => [path, options.method])).toEqual([
+      ['/api/admin/users/12/block', 'POST'],
+      ['/api/admin/users/12/unblock', 'POST'],
+      ['/api/admin/payments/19/status', 'PUT'],
+    ]);
+    expect(JSON.parse(String(fetcher.mock.calls[2][1].body))).toEqual({ status: 'PAID', paymentMethod: 'CARD' });
+    const query = new URL(fetcher.mock.calls[3][0], 'https://hub.example').searchParams;
+    expect(query.get('sortBy')).toBe('name');
+    expect(query.get('direction')).toBe('asc');
+    expect(query.get('search')).toBe('тест +380');
+  });
+});
