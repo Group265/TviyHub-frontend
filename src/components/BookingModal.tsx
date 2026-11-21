@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { errorMessage, isBookingAvailabilityConflict, isUnconfirmedWrite } from '../api/errors';
 import type { BookingType, Tariff, User, Workspace } from '../api/types';
@@ -20,6 +20,7 @@ interface BookingModalProps {
   onCreated: () => void;
 }
 interface Quote { key: string; price: number; available: boolean | null }
+interface PaymentSummary { ids: number[]; amount: number; deadline: string | null; latest: string | null }
 
 export function BookingModal({ workspace: initialWorkspace, workspaces, user, tariffs, initialType, initialDate, initialStart, initialHours, onClose, onCreated }: BookingModalProps) {
   const [workspaceId, setWorkspaceId] = useState<number | null>(initialWorkspace?.id ?? null);
@@ -32,10 +33,12 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
-  const [payment,setPayment] = useState<{ ids: number[]; amount: number; deadline: string | null; latest: string | null } | null>(null);
-  const [payAtDesk,setPayAtDesk] = useState(false);
+  const [payment,setPayment] = useState<PaymentSummary | null>(null);
+  const [paymentMethod,setPaymentMethod] = useState<'desk' | 'stripe'>('desk');
   const [retry,setRetry]=useState(0);
   const now=useVenueClock();
+  const paymentHint = useId();
+  const stripeAvailable = user.role === 'USER' && import.meta.env.VITE_STRIPE_CHECKOUT_ENABLED === 'true';
   const choices=workspaces.filter(w=>type==='HOURLY'||w.type==='DESK');
   const workspace=choices.find(w=>w.id===workspaceId);
   const validation=bookingValidation(date,start,hours,type,now);
@@ -75,11 +78,13 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
     if(currentValidation){setError(currentValidation);return;}
     if(!workspace||!payload||busy||checking||validation||price===null||(type!=='SUBSCRIPTION'&&available!==true))return;
     setBusy(true);setError('');
+    let createdPayment: PaymentSummary | null = null;
+    let openingCheckout = false;
     try {
       if(type==='SUBSCRIPTION') {
         const result=await api.subscribe(workspace.id,date);
         const id = getPaymentId(result);
-        setPayment({ ids: id ? [id] : [], amount: price, deadline: null, latest: null });
+        createdPayment = { ids: id ? [id] : [], amount: price, deadline: null, latest: null };
         setSuccess(`Абонемент №${result.id}: ${displayWorkspace(workspace)}, з ${result.startDate} до ${result.endDate}. ${statusText(result.status)}. Місце утримується до 24 годин.`);
       } else {
         const created=await api.book(payload);
@@ -93,14 +98,19 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
           const windows = unpaid.map(bookingPaymentWindow);
           const deadline = windows.every(window => window.deadline) ? windows.map(window => window.deadline!).sort()[0] : null;
           const latest = windows.map(window => window.deadline ?? window.start).sort()[0];
-          setPayment({ ids: ids.length === unpaid.length ? ids : [], amount: unpaid.reduce((sum, booking) => sum + Number(booking.totalPrice), 0), deadline, latest });
+          createdPayment = { ids: ids.length === unpaid.length ? ids : [], amount: unpaid.reduce((sum, booking) => sum + Number(booking.totalPrice), 0), deadline, latest };
         }
         const booking = created[0];
         setSuccess(created.length === 1
           ? `Бронювання №${booking.id}: ${displayWorkspace(workspace)}. ${date}, ${type==='DAILY'?'09:00–19:00':`${start}–${endTime(start,hours)}`}. ${statusText(booking.status)}.`
           : `Створено бронювання №${created.map(item => item.id).join(', №')}.`);
       }
+      setPayment(createdPayment);
       onCreated();
+      if (paymentMethod === 'stripe' && createdPayment && canOpenCheckout(createdPayment)) {
+        openingCheckout = true;
+        await openCheckout(createdPayment);
+      }
     } catch (err) {
       if (isUnconfirmedWrite(err)) {
         const location = type === 'SUBSCRIPTION' ? 'список абонементів' : 'історію бронювань';
@@ -112,26 +122,29 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
         setQuote(current => current?.key === quoteKey ? {...current,available:false} : current);
       }
     }
-    finally{setBusy(false);}
+    finally { if (!openingCheckout) setBusy(false); }
   }
-  const canPayOnline = user.role === 'USER' && !!payment?.ids.length && (!payment.latest || payment.latest > venueDateTime(now));
-  async function payOnline() {
-    if (!canPayOnline || busy || !payment || (payment.latest && payment.latest <= venueDateTime())) return;
+  function canOpenCheckout(details: PaymentSummary | null, time = new Date()) {
+    return stripeAvailable && !!details?.ids.length && (!details.latest || details.latest > venueDateTime(time));
+  }
+  async function openCheckout(details: PaymentSummary) {
     setBusy(true);
     setError('');
     try {
-      location.assign(await startCheckout(payment.ids, user.id, type === 'SUBSCRIPTION' ? 'single' : 'batch'));
+      location.assign(await startCheckout(details.ids, user.id, type === 'SUBSCRIPTION' ? 'single' : 'batch'));
     } catch (err) {
       setError(`Не вдалося відкрити сторінку оплати. ${errorMessage(err, 'Спробуйте ще раз.')}`);
       setBusy(false);
     }
   }
+  const canPayOnline = canOpenCheckout(payment, now);
   const monthlyTariff=tariffs.find(t=>t.workspaceType==='DESK'&&t.bookingType==='SUBSCRIPTION');
-  return <Modal title={success && payment ? 'Спосіб оплати' : 'Бронювання місця'} onClose={() => { if (!busy) onClose(); }}>
+  return <Modal title={success && payment ? 'Оплата бронювання' : 'Бронювання місця'} onClose={() => { if (!busy) onClose(); }}>
     <p className="eyebrow">Оформлення бронювання · час Києва</p>
     {success ? <>
       <Alert success>{success}</Alert>
-      {payment && payAtDesk ? <div className="form">
+      {payment && paymentMethod === 'desk' ? <div className="form">
+        <p className="muted">Оплата в адміністратора готівкою або карткою через термінал.</p>
         <Alert>{payment.deadline ? paymentDeadlineText(payment.deadline) : type === 'SUBSCRIPTION'
           ? 'Сплатіть у адміністратора протягом 24 годин.'
           : 'Сплатіть у адміністратора протягом 24 годин після створення бронювання, але не пізніше його початку.'}</Alert>
@@ -140,13 +153,13 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
         <div className="booking-total"><div><small>Разом до сплати</small><strong>{money(payment.amount)}</strong></div></div>
         {error && <Alert>{error}</Alert>}
         {user.role === 'USER' && <>
-          <button type="button" className="btn full" disabled={busy || !canPayOnline} onClick={payOnline}>
-            {busy ? 'Відкриваємо оплату…' : 'Оплатити онлайн (Stripe)'}
+          <button type="button" className="btn full" disabled={busy || !canPayOnline}
+            onClick={() => { if (!busy && canOpenCheckout(payment)) void openCheckout(payment); }}>
+            {busy ? 'Відкриваємо оплату…' : 'Повторити онлайн-оплату'}
           </button>
-          {!canPayOnline && <p className="muted">Онлайн-оплата для цього замовлення недоступна.</p>}
+          {!canPayOnline && <p className="muted">Бронювання створено. Онлайн-оплата для нього недоступна.</p>}
         </>}
-        <button type="button" className="btn outline full" onClick={() => { setError(''); setPayAtDesk(true); }} disabled={busy}>Оплатити адміністратору</button>
-        <p className="muted">{type === 'SUBSCRIPTION' ? 'Для підтвердження зверніться до адміністратора протягом 24 годин.' : 'Готівкою або карткою через термінал.'}</p>
+        <button type="button" className="btn outline full" onClick={() => { setError(''); setPaymentMethod('desk'); }} disabled={busy}>Оплатити адміністратору</button>
       </div> : <button className="btn full" onClick={onClose}>Готово</button>}
     </> : <>
       <form {...ukrainianFormValidation} className="form" onSubmit={submit}>
@@ -166,7 +179,20 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
         {!workspace&&<p className="muted" role="status">Оберіть місце зі списку, щоб перевірити наявність і вартість.</p>}
         {available===false&&!error&&<Alert>Місце недоступне у вибраний час. Оберіть інше місце, дату або час.</Alert>}
         <div className="booking-total"><div><small>Разом до сплати:</small><strong>{checking?'Уточнюємо…':price===null?'—':money(price)}</strong></div></div>
-        <button className="btn full" disabled={!workspace||busy||checking||!!validation||price===null||(type!=='SUBSCRIPTION'&&available!==true)}>{busy?'Оформлюємо…':'Забронювати'}<Icon name="imgIconCalendar"/></button>
+        <fieldset className="booking-payment-options" disabled={busy}>
+          <legend>Спосіб оплати</legend>
+          <label className="payment-option">
+            <input type="radio" name="paymentMethod" value="desk" checked={paymentMethod === 'desk'} onChange={() => setPaymentMethod('desk')} />
+            Оплатити адміністратору
+          </label>
+          <label className="payment-option">
+            <input type="radio" name="paymentMethod" value="stripe" checked={paymentMethod === 'stripe'} onChange={() => setPaymentMethod('stripe')}
+              disabled={!stripeAvailable} aria-describedby={!stripeAvailable ? paymentHint : undefined} />
+            Оплатити онлайн (Stripe)
+          </label>
+          {!stripeAvailable && <p id={paymentHint} className="muted">Онлайн-оплата наразі недоступна.</p>}
+        </fieldset>
+        <button className="btn full" disabled={!workspace||busy||checking||!!validation||price===null||(type!=='SUBSCRIPTION'&&available!==true)}>{busy?'Оформлюємо…':paymentMethod==='stripe'?'Забронювати й оплатити':'Забронювати'}<Icon name="imgIconCalendar"/></button>
         {error&&type!=='SUBSCRIPTION'&&<button type="button" className="text-button" onClick={()=>setRetry(v=>v+1)}>Оновити доступність і вартість</button>}
       </form>
     </>}

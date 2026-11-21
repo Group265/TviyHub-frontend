@@ -15,3 +15,11 @@
 .checkout-page{margin-top:28px;margin-bottom:48px;padding:clamp(16px,4vw,36px);background:#fff;border:1px solid var(--border);border-radius:20px}
 .checkout-page h1{margin:0 0 20px;font-size:clamp(1.65rem,4vw,2.35rem)}
 .checkout-result{max-width:630px}
+
+.booking-payment-options{display:grid;gap:10px;margin:0;padding:0;border:0;min-width:0}
+.booking-payment-options legend{padding:0;margin:0 0 10px;font-size:14px;font-weight:600}
+.form .payment-option{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:12px;padding:10px 14px;cursor:pointer}
+.payment-option:has(input:checked){border-color:var(--orange);background:var(--cream)}
+.payment-option:has(input:disabled){cursor:default;color:var(--muted)}
+.form .payment-option input{width:1rem;height:1rem;flex:0 0 1rem;margin:0;padding:0;accent-color:var(--orange)}
+.booking-payment-options p{margin:0}
