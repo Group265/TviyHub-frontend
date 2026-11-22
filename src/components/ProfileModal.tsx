@@ -214,7 +214,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
               {user.role === 'USER' && pendingPayment && <button type="button" className="btn outline small"
                 disabled={busy || !paymentId || latest <= now}
                 onClick={() => { if (paymentId) payOnline(item, paymentId, latest); }}>Оплатити онлайн</button>}
-              <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace,item)}>Повторити</button>
+              {!pendingPayment && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace,item)}>Повторити</button>}
               {canCancelBooking(item, now) && <button className="text-button danger" disabled={busy} onClick={() => {
                 setCancelError('');setCancelNotice('');setConfirmCancel(item);
               }}>Скасувати</button>}
