@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { bookingAlreadyStartedError, errorMessage } from '../api/errors';
-import type { AdminUser, Booking, InPersonPaymentMethod, Page, Payment, Workspace } from '../api/types';
+import type { AdminUser, Booking, InPersonPaymentMethod, Page, Payment, Subscription, Workspace } from '../api/types';
 import { bookingDisplayStatus, bookingTypeText, canCancelBooking, displayWorkspace, money, roleText, statusText, venueDateTime } from '../booking';
 import { Alert, Modal, Pager } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
 const pageSize = 10;
-type Tab = 'bookings' | 'users';
+type Tab = 'bookings' | 'subscriptions' | 'users';
 type BookingSort = 'recent' | 'oldest' | 'client' | 'payment';
 type UserSort = 'recent' | 'name';
 type Action =
@@ -18,8 +18,9 @@ type Action =
 const paymentSort: Record<string, number> = { UNPAID: 1, PAID: 2, REFUNDED: 3 };
 const collator = new Intl.Collator('uk', { sensitivity: 'base', numeric: true });
 const bookingDate = (booking: Booking) => [booking.bookingDate, booking.startTime ?? '09:00'].join(' ');
-const clientName = (booking: Booking, clients: Record<number, AdminUser>) =>
-  clients[booking.userId]?.name || ('Клієнт №' + booking.userId);
+const clientName = (userId: number, client?: AdminUser) => client?.name || ('Клієнт №' + userId);
+const matchesClient = (userId: number, client: AdminUser | undefined, term: string) =>
+  !term || [clientName(userId, client), client?.email, client?.phone].some(value => value?.toLocaleLowerCase('uk').includes(term));
 
 function confirmationText(action: Action): string {
   if (action.type === 'cancel') return 'Скасувати бронювання №' + action.booking.id + '?';
@@ -41,6 +42,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
   const [users, setUsers] = useState<Page<AdminUser> | null>(null);
   const [clients, setClients] = useState<Record<number, AdminUser>>({});
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
@@ -80,17 +82,23 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
         return;
       }
 
-      const [rows, transactions] = await Promise.all([api.bookings(signal), api.adminPayments(signal)]);
-      const clientRows = await api.adminBookingClients(rows.map(booking => booking.userId), signal);
+      const [rows, transactions] = tab === 'bookings'
+        ? await Promise.all([api.bookings(signal), api.adminPayments(signal)])
+        : [[], []];
+      const subscriptionRows = tab === 'subscriptions' ? await api.adminSubscriptions(signal) : [];
+      const entries = tab === 'subscriptions' ? subscriptionRows : rows;
+      const clientRows = await api.adminClients(entries.map(item => item.userId), signal);
       if (signal.aborted) return;
       setBookings(rows);
+      setSubscriptions(subscriptionRows);
       setPayments(transactions);
       setClients(Object.fromEntries(clientRows.map(user => [user.id, user])));
     }
 
     load().catch(err => {
       if (signal.aborted) return;
-      const action = tab === 'users' ? 'Не вдалося завантажити користувачів.' : 'Не вдалося завантажити дані про бронювання.';
+      const action = tab === 'users' ? 'Не вдалося завантажити користувачів.' :
+        tab === 'subscriptions' ? 'Не вдалося завантажити абонементи.' : 'Не вдалося завантажити дані про бронювання.';
       setLoadError((action + ' ' + errorMessage(err, '')).trim());
     }).finally(() => {
       if (!signal.aborted) setLoading(false);
@@ -103,14 +111,12 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
 
   const sortedBookings = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('uk');
-    return bookings.filter(booking => {
-      if (!term) return true;
-      const client = clients[booking.userId];
-      return [clientName(booking, clients), client?.email, client?.phone].some(value => value?.toLocaleLowerCase('uk').includes(term));
-    }).sort((left, right) => {
+    return bookings.filter(booking => matchesClient(booking.userId, clients[booking.userId], term)).sort((left, right) => {
       const newest = bookingDate(right).localeCompare(bookingDate(left)) || right.id - left.id;
       if (bookingSort === 'oldest') return -newest;
-      if (bookingSort === 'client') return collator.compare(clientName(left, clients), clientName(right, clients)) || newest;
+      if (bookingSort === 'client') return collator.compare(
+        clientName(left.userId, clients[left.userId]), clientName(right.userId, clients[right.userId]),
+      ) || newest;
       if (bookingSort === 'payment') {
         const leftStatus = bookingPayments.get(left.id)?.status ?? left.paymentStatus;
         const rightStatus = bookingPayments.get(right.id)?.status ?? right.paymentStatus;
@@ -120,9 +126,17 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
     });
   }, [bookings, bookingPayments, bookingSort, clients, search]);
 
-  const totalPages = tab === 'users' ? users?.totalPages ?? 0 : Math.ceil(sortedBookings.length / pageSize);
+  const sortedSubscriptions = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('uk');
+    return subscriptions.filter(item => matchesClient(item.userId, clients[item.userId], term))
+      .sort((left, right) => right.startDate.localeCompare(left.startDate) || right.id - left.id);
+  }, [subscriptions, clients, search]);
+
+  const entryCount = tab === 'subscriptions' ? sortedSubscriptions.length : sortedBookings.length;
+  const totalPages = tab === 'users' ? users?.totalPages ?? 0 : Math.ceil(entryCount / pageSize);
   const visiblePage = tab === 'users' ? page : Math.min(page, Math.max(0, totalPages - 1));
   const visibleBookings = sortedBookings.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
+  const visibleSubscriptions = sortedSubscriptions.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
 
   function changeTab(next: Tab) {
     setTab(next);
@@ -189,12 +203,13 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
     <div className="actions admin-tabs">
       <button className={tab === 'users' ? 'btn' : 'btn outline'} aria-pressed={tab === 'users'} disabled={busy} onClick={() => changeTab('users')}>Усі користувачі</button>
       <button className={tab === 'bookings' ? 'btn' : 'btn outline'} aria-pressed={tab === 'bookings'} disabled={busy} onClick={() => changeTab('bookings')}>Усі бронювання</button>
+      <button className={tab === 'subscriptions' ? 'btn' : 'btn outline'} aria-pressed={tab === 'subscriptions'} disabled={busy} onClick={() => changeTab('subscriptions')}>Абонементи</button>
     </div>
     <div className="admin-filters">
       <label className="search">Пошук {tab === 'users' ? 'користувача' : 'клієнта'}
         <input type="search" value={search} disabled={busy} onChange={e => { setSearch(e.target.value); setPage(0); setConfirm(null); }} placeholder="Ім’я, пошта або телефон" />
       </label>
-      <label className="search">Сортування
+      {tab !== 'subscriptions' && <label className="search">Сортування
         {tab === 'users' ? <select value={userSort} disabled={busy} onChange={e => { setUserSort(e.target.value as UserSort); setPage(0); setConfirm(null); }}>
           <option value="recent">Спочатку нові користувачі</option>
           <option value="name">За ім’ям</option>
@@ -204,7 +219,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
           <option value="client">За ім’ям клієнта</option>
           <option value="payment">За статусом оплати</option>
         </select>}
-      </label>
+      </label>}
     </div>
     {error && <Alert>{error}</Alert>}
     {notice && <Alert success>{notice}</Alert>}
@@ -226,6 +241,22 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
           </button></td>
         </tr>)}</tbody>
       </table></div> : <p className="empty">Користувачів не знайдено.</p> :
+      tab === 'subscriptions' ?
+      visibleSubscriptions.length ? <div className="table-scroll"><table>
+        <thead><tr><th scope="col">№ абонемента</th><th>Клієнт</th><th>Місце</th><th>Період</th><th>Статус</th><th>Оплата</th></tr></thead>
+        <tbody>{visibleSubscriptions.map(item => {
+          const client = clients[item.userId];
+          const workspace = workspaces.find(workspace => workspace.id === item.workspaceId);
+          return <tr key={item.id}>
+            <td>№{item.id}</td>
+            <td>{clientName(item.userId, client)}<small>{client?.phone}</small></td>
+            <td>{displayWorkspace(workspace ?? { id: item.workspaceId, name: '' })}</td>
+            <td>{item.startDate} — {item.endDate}</td>
+            <td>{statusText(item.status)}</td>
+            <td>{statusText(item.paymentStatus)}</td>
+          </tr>;
+        })}</tbody>
+      </table></div> : <p className="empty">Абонементів не знайдено.</p> :
       visibleBookings.length ? <div className="table-scroll"><table>
         <thead><tr><th scope="col">№ бронювання</th><th>Дата / час</th><th>Клієнт</th><th>Ресурс / тариф</th><th>Сума</th><th>Статус</th><th>Оплата</th><th>Дії</th></tr></thead>
         <tbody>{visibleBookings.map(booking => {
@@ -237,7 +268,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
           return <tr key={booking.id}>
             <td>№{booking.id}</td>
             <td>{booking.bookingDate}<small>{booking.startTime?.slice(0, 5)}–{booking.endTime?.slice(0, 5)}</small></td>
-            <td>{clientName(booking, clients)}<small>{clients[booking.userId]?.phone}</small></td>
+            <td>{clientName(booking.userId, clients[booking.userId])}<small>{clients[booking.userId]?.phone}</small></td>
             <td>{displayWorkspace(workspace ?? { id: booking.workspaceId, name: booking.workspaceName ?? '' })}<small>{bookingTypeText(booking.bookingType)}</small></td>
             <td>{money(booking.totalPrice)}</td>
             <td><span className={'status ' + statusClass}>{statusText(status)}</span></td>

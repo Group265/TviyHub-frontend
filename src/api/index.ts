@@ -55,13 +55,15 @@ export const api = {
     request<StripeBatchSession>('/payments/stripe-session/batch', json('POST', { paymentIds, successUrl, cancelUrl }), true),
   verifyStripePayment: (sessionId: string, signal?: AbortSignal) =>
     request<Payment | Payment[] | { payments: Payment[] }>(`/payments/success?${new URLSearchParams({ session_id: sessionId })}`, { signal }, true),
-  bookings: (signal?: AbortSignal) => request<Booking[]>('/bookings', { signal }, true),
+  bookings: (signal?: AbortSignal, userId?: number) =>
+    request<Booking[]>(userId === undefined ? '/bookings' : `/bookings?userId=${userId}`, { signal }, true),
+  adminSubscriptions: (signal?: AbortSignal) => request<Subscription[]>('/admin/subscriptions', { signal }, true),
   adminUsers: (page = 0, search = '', order: 'recent' | 'name' | 'id' = 'recent', signal?: AbortSignal, size = 10) => {
     const sortBy = order === 'recent' ? 'createdAt' : order;
     const query = new URLSearchParams({ page: String(page), size: String(size), search, sortBy, direction: order === 'recent' ? 'desc' : 'asc' });
     return request<Page<AdminUser>>(`/admin/users?${query}`, { signal }, true);
   },
-  async adminBookingClients(ids: number[], signal: AbortSignal) {
+  async adminClients(ids: number[], signal: AbortSignal) {
     const remaining = new Set(ids);
     const clients: AdminUser[] = [];
     for (let page = 0, totalPages = 1; page < totalPages && remaining.size; page++) {

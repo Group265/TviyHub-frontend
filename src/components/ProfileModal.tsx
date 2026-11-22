@@ -30,7 +30,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
   const [cancelNotice,setCancelNotice]=useState('');
   const [confirmCancel,setConfirmCancel]=useState<HistoryItem|null>(null);
   const [paymentError,setPaymentError] = useState('');
-  const [paymentBookings,setPaymentBookings] = useState<Map<number, Booking>>(new Map());
+  const [paymentBookings,setPaymentBookings] = useState<Map<number, Booking> | null>(null);
   const now = venueDateTime(useVenueClock());
   const upcomingItems = useMemo(() => upcoming.filter(item => isUpcomingBooking(item, now)), [upcoming, now]);
   const totalPages = scope === 'upcoming' ? Math.ceil(upcomingItems.length / HISTORY_PAGE_SIZE) : (history?.totalPages ?? 0);
@@ -41,8 +41,9 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
   const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
   const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
   const serverPage = scope === 'upcoming' ? 0 : page;
-  const needsPaymentData = user.role === 'USER' && visibleHistory.some(item => item.status === 'PENDING_PAYMENT' &&
-    (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline)));
+  const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
+    (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
+      (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,13 +70,14 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
   useEffect(() => {
     if (!needsPaymentData) return;
     const controller = new AbortController();
-    api.bookings(controller.signal).then(bookings => {
+    setPaymentBookings(null);
+    api.bookings(controller.signal, user.role === 'ADMIN' ? user.id : undefined).then(bookings => {
       if (!controller.signal.aborted) setPaymentBookings(new Map(bookings.map(booking => [booking.id, booking])));
     }).catch(() => {
       if (!controller.signal.aborted) setPaymentBookings(new Map());
     });
     return () => controller.abort();
-  }, [needsPaymentData, revision]);
+  }, [needsPaymentData, revision, user.id, user.role]);
 
   useEffect(() => {
     if(user.role!=='USER')return;
@@ -187,9 +189,12 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
     {loading ? <p role="status">Завантажуємо бронювання…</p> : historyError ? <Alert>{historyError}</Alert> : <>
       {visibleHistory.length > 0 ? <div className="table-scroll">
         <table>
-          <thead><tr><th>Дата візиту</th><th>Тип ресурсу</th><th>Час</th><th>Сума / статус</th><th>Дії</th></tr></thead>
+          <thead><tr><th>Дата візиту</th><th>Тип ресурсу</th><th>Час</th><th>Сума / статус</th><th>Оплата</th><th>Дії</th></tr></thead>
           <tbody>{visibleHistory.map(item => {
-            const paymentBooking = paymentBookings.get(item.id);
+            const paymentBooking = paymentBookings?.get(item.id);
+            const paymentStatus = item.paymentStatus || paymentBooking?.paymentStatus;
+            const paymentLabel = paymentStatus ? statusText(paymentStatus) :
+              paymentBookings === null ? 'Завантаження…' : 'Статус недоступний';
             const paymentId = getPaymentId(item) ?? (paymentBooking && getPaymentId(paymentBooking));
             const pendingPayment = item.status === 'PENDING_PAYMENT';
             const { start, deadline } = bookingPaymentWindow({
@@ -204,6 +209,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
             <td>{money(item.totalPrice)}<small>{pendingPayment ? <span className="status">{statusText(item.status)}</span> : statusText(bookingDisplayStatus(item, now))}</small>
               {pendingPayment && deadline && <small>{paymentDeadlineText(deadline)}</small>}
             </td>
+            <td>{paymentLabel}</td>
             <td><div className="actions">
               {user.role === 'USER' && pendingPayment && <button type="button" className="btn outline small"
                 disabled={busy || !paymentId || latest <= now}

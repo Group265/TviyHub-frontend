@@ -14,7 +14,7 @@ export interface BookingPayment {
   paymentDeadline?: string | null;
 }
 export interface Booking extends BookingPayment { id: number; userId: number; workspaceId: number; workspaceName: string; bookingType: BookingType; bookingDate: string; startTime: string | null; endTime: string | null; totalPrice: number; status: string; paymentStatus: string }
-export interface HistoryItem extends BookingPayment { id: number; bookingDate: string; startTime: string | null; endTime: string | null; bookingType: BookingType; status: string; totalPrice: number; workspace: Workspace }
+export interface HistoryItem extends BookingPayment { id: number; bookingDate: string; startTime: string | null; endTime: string | null; bookingType: BookingType; status: string; paymentStatus?: string | null; totalPrice: number; workspace: Workspace }
 export interface Page<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface Subscription { id: number; userId: number; workspaceId: number; startDate: string; endDate: string; status: string; paymentStatus: string; paymentId?: number | null }
 export interface Payment { id: number; status: string; amount: number; bookingId: number | null; subscriptionId: number | null; paymentMethod: string }
