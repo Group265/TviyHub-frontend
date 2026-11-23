@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, HISTORY_PAGE_SIZE } from '../api';
 import { clearSession, logout } from '../api/client';
-import { bookingAlreadyStartedError, errorMessage, passwordsMismatch, phoneFormatError } from '../api/errors';
+import { bookingAlreadyStartedError, errorMessage, passwordsMismatch } from '../api/errors';
 import type { Booking, HistoryItem, Page, Subscription, User, Workspace } from '../api/types';
 import {
   bookingCloseTime, bookingDisplayStatus, bookingOpenTime, bookingPaymentWindow, canCancelBooking, displayWorkspace,
@@ -9,6 +9,7 @@ import {
 } from '../booking';
 import { getPaymentId, startCheckout } from '../checkout';
 import { Alert, Icon, Modal, Pager, ukrainianFormValidation } from './ui';
+import { ProfileDetailsEditor } from './ProfileDetailsEditor';
 import { useVenueClock } from '../useVenueClock';
 
 const passwordReuseError = 'Новий пароль має відрізнятися від поточного.';
@@ -29,7 +30,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const [revision,setRevision]=useState(0);
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
-  const [edit,setEdit]=useState<'name'|'phone'|'email'|'password'|null>(null);
+  const [edit,setEdit]=useState<'details'|'password'|null>(null);
   const [codeStep,setCodeStep]=useState(false);
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState('');
@@ -39,6 +40,8 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const [paymentError,setPaymentError] = useState('');
   const [paymentBookings,setPaymentBookings] = useState<Map<number, Booking> | null>(null);
   const leavingForCheckout = useRef(false);
+  const detailsPanelId = useId();
+  const passwordPanelId = useId();
   const passwordErrorId = useId();
   const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
   const now = venueDateTime(useVenueClock());
@@ -119,36 +122,33 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
     setError(previous => samePassword ? passwordReuseError : previous === passwordReuseError ? '' : previous);
   }
 
-  async function submit(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();if(busy||!edit)return;
+  function openEditor(next: typeof edit) {
+    setEdit(next === edit ? null : next);
+    setCodeStep(false);
+    setError('');
+    setNotice('');
+  }
+
+  async function submitPassword(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();if(busy||edit!=='password')return;
     const form=new FormData(e.currentTarget);const get=(name:string)=>String(form.get(name)||'');
-    if (edit === 'password' && !codeStep && reusesCurrentPassword(form)) {
+    if (!codeStep && reusesCurrentPassword(form)) {
       setError(passwordReuseError);
       return;
     }
     setBusy(true);setError('');setNotice('');
     try{
-      if(edit==='name'){onUser(await api.updateName(get('name').trim()));setEdit(null);setNotice('Ім’я оновлено.');}
-      else if(!codeStep){
-        const newPhone = get('newPhone').replace(/[\s()-]/g, '');
+      if(!codeStep){
         const newPassword = get('newPassword');
         const confirmNewPassword = get('confirmNewPassword');
-        if (edit === 'phone' && !/^\+[1-9]\d{6,14}$/.test(newPhone)) { setError(phoneFormatError); return; }
-        if (edit === 'password' && newPassword !== confirmNewPassword) { setError(passwordsMismatch); return; }
+        if (newPassword !== confirmNewPassword) { setError(passwordsMismatch); return; }
         const currentPassword = get('currentPassword');
-        const body = edit === 'phone' ? { newPhone }
-          : edit === 'email' ? { newEmail: get('newEmail').trim(), currentPassword }
-          : { newPassword, confirmNewPassword, currentPassword };
-        await api.requestChange(edit,body);
+        await api.requestChange('password', { newPassword, confirmNewPassword, currentPassword });
         setCodeStep(true);
-        setNotice(edit === 'email'
-          ? 'Введіть код, який надійшов на нову електронну адресу.'
-          : 'Введіть код, який надійшов на електронну адресу вашого профілю.');
+        setNotice('Введіть код, який надійшов на електронну адресу вашого профілю.');
       }else{
-        const updated = await api.confirmChange(edit, get('code'));
-        if(edit==='password'){clearSession();onUser(null);onClose();return;}
-        if (updated) onUser(updated);
-        setEdit(null);setCodeStep(false);setNotice('Дані оновлено.');
+        await api.confirmChange('password', get('code'));
+        clearSession();onUser(null);onClose();
       }
     }catch(err){setError(errorMessage(err));}finally{setBusy(false);}
   }
@@ -202,15 +202,21 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const content = <>
     <div className="profile-head"><div className="avatar" aria-hidden="true">{user.name.slice(0,1)}</div><div><h3>{user.name}</h3><p className="profile-contacts"><span><Icon name="imgProfileEmail"/>{user.email}</span><span><Icon name="imgProfilePhone"/>{user.phone||'Телефон не вказаний'}</span></p></div></div>
     {!user.emailVerified&&<Alert>Пошта не підтверджена. Завершіть реєстрацію за допомогою коду з листа.</Alert>}
-    <div className="actions">{(['name','phone','email','password'] as const).map(kind=><button className="btn outline small" key={kind} disabled={busy||(kind!=='name'&&!user.emailVerified)} onClick={()=>{setEdit(kind);setCodeStep(false);setError('');setNotice('');}}>{({name:'Змінити ім’я',phone:'Телефон',email:'Пошта',password:'Пароль'})[kind]}</button>)}<button className="text-button muted" disabled={busy} onClick={signout}>Вийти</button></div>
+    <div className="actions">
+      <button type="button" className={`btn small${edit === 'details' ? '' : ' outline'}`} disabled={busy}
+        aria-expanded={edit === 'details'} aria-controls={edit === 'details' ? detailsPanelId : undefined}
+        onClick={() => openEditor('details')}>Редагувати</button>
+      <button type="button" className={`btn small${edit === 'password' ? '' : ' outline'}`} disabled={busy || !user.emailVerified}
+        aria-expanded={edit === 'password'} aria-controls={edit === 'password' ? passwordPanelId : undefined}
+        onClick={() => openEditor('password')}>Пароль</button>
+      <button className="text-button muted" disabled={busy} onClick={signout}>Вийти</button>
+    </div>
     {error&&!showPasswordReuseError&&<Alert>{error}</Alert>}{notice&&<Alert success>{notice}</Alert>}
-    {edit&&<form {...ukrainianFormValidation} className="form edit-panel" onSubmit={submit} key={`${edit}-${codeStep}`}><h3>{({name:'Редагування профілю',phone:'Зміна телефону',email:'Зміна пошти',password:'Зміна пароля'})[edit]}</h3>
+    {edit === 'details' && <ProfileDetailsEditor id={detailsPanelId} user={user} busy={busy} onBusy={setBusy} onUser={onUser}
+      onCancel={() => openEditor(null)} onSaved={() => { setEdit(null); setNotice('Дані збережено.'); }} />}
+    {edit === 'password' && <form {...ukrainianFormValidation} id={passwordPanelId} className="form edit-panel" onSubmit={submitPassword} key={String(codeStep)}><h3>Зміна пароля</h3>
       {codeStep?<label>Код із листа<input name="code" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code"/></label>:<>
-        {edit==='name'&&<label>Ім’я та прізвище<input name="name" required maxLength={100} defaultValue={user.name} autoComplete="name"/></label>}
-        {edit==='phone'&&<label>Новий номер телефону<input name="newPhone" type="tel" required placeholder="+380..."/></label>}
-        {edit==='email'&&<label>Нова пошта<input name="newEmail" type="email" required/></label>}
-        {(edit==='email'||edit==='password')&&<label>Поточний пароль<input name="currentPassword" type="password" required autoComplete="current-password" onInput={edit==='password' ? checkPasswordReuse : undefined}/></label>}
-        {edit==='password'&&<>
+        <label>Поточний пароль<input name="currentPassword" type="password" required autoComplete="current-password" onInput={checkPasswordReuse}/></label>
           <div>
             <label>Новий пароль<input name="newPassword" type="password" minLength={8} maxLength={72} required autoComplete="new-password"
               onInput={checkPasswordReuse} aria-invalid={showPasswordReuseError || undefined}
@@ -218,9 +224,8 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
             {showPasswordReuseError && <p id={passwordErrorId} className="danger" role="alert">{passwordReuseError}</p>}
           </div>
           <label>Підтвердження нового пароля<input name="confirmNewPassword" type="password" maxLength={72} required autoComplete="new-password"/></label>
-        </>}
       </>}
-      <div className="actions"><button className="btn small" disabled={busy}>{busy?'Зачекайте…':codeStep?'Підтвердити':edit==='name'?'Зберегти':'Надіслати код'}</button><button type="button" className="text-button" disabled={busy} onClick={()=>{setEdit(null);setError('');setNotice('');}}>Скасувати</button></div>
+      <div className="actions"><button className="btn small" disabled={busy}>{busy?'Зачекайте…':codeStep?'Підтвердити':'Надіслати код'}</button><button type="button" className="text-button" disabled={busy} onClick={()=>openEditor(null)}>Скасувати</button></div>
     </form>}
     <div className="table-heading"><h3>Історія бронювань</h3><select aria-label="Фільтр історії" value={scope} onChange={e=>{
       setLoading(true);setHistoryError('');setPaymentError('');setConfirmCancel(null);setScope(e.target.value);setPage(0);
