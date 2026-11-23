@@ -1,17 +1,24 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, HISTORY_PAGE_SIZE } from '../api';
 import { clearSession, logout } from '../api/client';
 import { bookingAlreadyStartedError, errorMessage, passwordsMismatch, phoneFormatError } from '../api/errors';
 import type { Booking, HistoryItem, Page, Subscription, User, Workspace } from '../api/types';
 import {
   bookingCloseTime, bookingDisplayStatus, bookingOpenTime, bookingPaymentWindow, canCancelBooking, displayWorkspace,
-  isCurrentSubscription, isUpcomingBooking, money, paymentDeadlineText, statusText, venueDateTime,
+  isCurrentSubscription, isRetiredWorkspace, isUpcomingBooking, money, paymentDeadlineText, statusText, venueDateTime,
 } from '../booking';
 import { getPaymentId, startCheckout } from '../checkout';
 import { Alert, Icon, Modal, Pager, ukrainianFormValidation } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
-export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogoutError, standalone = false }: { user: User; onClose: () => void; onUser: (u: User | null) => void; onRepeat: (w: Workspace, item: HistoryItem) => void; onVerify: () => void; onLogoutError: (message: string) => void; standalone?: boolean }) {
+const passwordReuseError = 'Новий пароль має відрізнятися від поточного.';
+
+function reusesCurrentPassword(form: FormData): boolean {
+  const currentPassword = form.get('currentPassword');
+  return typeof currentPassword === 'string' && currentPassword.length > 0 && currentPassword === form.get('newPassword');
+}
+
+export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, standalone = false }: { user: User; onClose: () => void; onUser: (u: User | null) => void; onRepeat: (w: Workspace, item: HistoryItem) => void; onLogoutError: (message: string) => void; standalone?: boolean }) {
   const [history,setHistory]=useState<Page<HistoryItem>|null>(null);
   const [upcoming,setUpcoming]=useState<HistoryItem[]>([]);
   const [historyError,setHistoryError]=useState('');
@@ -31,6 +38,9 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
   const [confirmCancel,setConfirmCancel]=useState<HistoryItem|null>(null);
   const [paymentError,setPaymentError] = useState('');
   const [paymentBookings,setPaymentBookings] = useState<Map<number, Booking> | null>(null);
+  const leavingForCheckout = useRef(false);
+  const passwordErrorId = useId();
+  const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
   const now = venueDateTime(useVenueClock());
   const upcomingItems = useMemo(() => upcoming.filter(item => isUpcomingBooking(item, now)), [upcoming, now]);
   const totalPages = scope === 'upcoming' ? Math.ceil(upcomingItems.length / HISTORY_PAGE_SIZE) : (history?.totalPages ?? 0);
@@ -44,6 +54,17 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
   const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
     (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
       (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
+
+  useEffect(() => {
+    function restoreProfile(event: PageTransitionEvent) {
+      if (!event.persisted || !leavingForCheckout.current) return;
+      leavingForCheckout.current = false;
+      setBusy(false);
+      setRevision(value => value + 1);
+    }
+    window.addEventListener('pageshow', restoreProfile);
+    return () => window.removeEventListener('pageshow', restoreProfile);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,9 +112,21 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
   useEffect(() => {
     if (confirmCancel && !canConfirmCancel) setConfirmCancel(null);
   }, [confirmCancel, canConfirmCancel]);
+  function checkPasswordReuse(event: FormEvent<HTMLInputElement>) {
+    const form = event.currentTarget.form;
+    if (!form) return;
+    const samePassword = reusesCurrentPassword(new FormData(form));
+    setError(previous => samePassword ? passwordReuseError : previous === passwordReuseError ? '' : previous);
+  }
+
   async function submit(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();if(busy||!edit)return;setBusy(true);setError('');setNotice('');
+    e.preventDefault();if(busy||!edit)return;
     const form=new FormData(e.currentTarget);const get=(name:string)=>String(form.get(name)||'');
+    if (edit === 'password' && !codeStep && reusesCurrentPassword(form)) {
+      setError(passwordReuseError);
+      return;
+    }
+    setBusy(true);setError('');setNotice('');
     try{
       if(edit==='name'){onUser(await api.updateName(get('name').trim()));setEdit(null);setNotice('Ім’я оновлено.');}
       else if(!codeStep){
@@ -156,25 +189,34 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
     setBusy(true);
     setPaymentError('');
     try {
-      location.assign(await startCheckout([paymentId], user.id));
+      const url = await startCheckout([paymentId], user.id);
+      leavingForCheckout.current = true;
+      location.assign(url);
     } catch (err) {
+      leavingForCheckout.current = false;
       setPaymentError(`Не вдалося відкрити оплату бронювання №${item.id}. ${errorMessage(err, 'Спробуйте ще раз.')}`);
+    } finally {
       setBusy(false);
     }
   }
   const content = <>
     <div className="profile-head"><div className="avatar" aria-hidden="true">{user.name.slice(0,1)}</div><div><h3>{user.name}</h3><p className="profile-contacts"><span><Icon name="imgProfileEmail"/>{user.email}</span><span><Icon name="imgProfilePhone"/>{user.phone||'Телефон не вказаний'}</span></p></div></div>
-    {!user.emailVerified&&<Alert>Пошта не підтверджена. <button className="text-button" disabled={busy} onClick={onVerify}>Підтвердити пошту</button></Alert>}
+    {!user.emailVerified&&<Alert>Пошта не підтверджена. Завершіть реєстрацію за допомогою коду з листа.</Alert>}
     <div className="actions">{(['name','phone','email','password'] as const).map(kind=><button className="btn outline small" key={kind} disabled={busy||(kind!=='name'&&!user.emailVerified)} onClick={()=>{setEdit(kind);setCodeStep(false);setError('');setNotice('');}}>{({name:'Змінити ім’я',phone:'Телефон',email:'Пошта',password:'Пароль'})[kind]}</button>)}<button className="text-button muted" disabled={busy} onClick={signout}>Вийти</button></div>
-    {error&&<Alert>{error}</Alert>}{notice&&<Alert success>{notice}</Alert>}
+    {error&&!showPasswordReuseError&&<Alert>{error}</Alert>}{notice&&<Alert success>{notice}</Alert>}
     {edit&&<form {...ukrainianFormValidation} className="form edit-panel" onSubmit={submit} key={`${edit}-${codeStep}`}><h3>{({name:'Редагування профілю',phone:'Зміна телефону',email:'Зміна пошти',password:'Зміна пароля'})[edit]}</h3>
       {codeStep?<label>Код із листа<input name="code" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code"/></label>:<>
         {edit==='name'&&<label>Ім’я та прізвище<input name="name" required maxLength={100} defaultValue={user.name} autoComplete="name"/></label>}
         {edit==='phone'&&<label>Новий номер телефону<input name="newPhone" type="tel" required placeholder="+380..."/></label>}
         {edit==='email'&&<label>Нова пошта<input name="newEmail" type="email" required/></label>}
-        {(edit==='email'||edit==='password')&&<label>Поточний пароль<input name="currentPassword" type="password" required autoComplete="current-password"/></label>}
+        {(edit==='email'||edit==='password')&&<label>Поточний пароль<input name="currentPassword" type="password" required autoComplete="current-password" onInput={edit==='password' ? checkPasswordReuse : undefined}/></label>}
         {edit==='password'&&<>
-          <label>Новий пароль<input name="newPassword" type="password" minLength={8} maxLength={72} required autoComplete="new-password"/></label>
+          <div>
+            <label>Новий пароль<input name="newPassword" type="password" minLength={8} maxLength={72} required autoComplete="new-password"
+              onInput={checkPasswordReuse} aria-invalid={showPasswordReuseError || undefined}
+              aria-describedby={showPasswordReuseError ? passwordErrorId : undefined}/></label>
+            {showPasswordReuseError && <p id={passwordErrorId} className="danger" role="alert">{passwordReuseError}</p>}
+          </div>
           <label>Підтвердження нового пароля<input name="confirmNewPassword" type="password" maxLength={72} required autoComplete="new-password"/></label>
         </>}
       </>}
@@ -214,7 +256,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onVerify, onLogo
               {user.role === 'USER' && pendingPayment && <button type="button" className="btn outline small"
                 disabled={busy || !paymentId || latest <= now}
                 onClick={() => { if (paymentId) payOnline(item, paymentId, latest); }}>Оплатити онлайн</button>}
-              {!pendingPayment && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace,item)}>Повторити</button>}
+              {!pendingPayment && !isRetiredWorkspace(item.workspace) && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace,item)}>Повторити</button>}
               {canCancelBooking(item, now) && <button className="text-button danger" disabled={busy} onClick={() => {
                 setCancelError('');setCancelNotice('');setConfirmCancel(item);
               }}>Скасувати</button>}

@@ -139,8 +139,8 @@ export function BookingModal({ workspace: initialWorkspace, workspaces, user, ta
   }
   const canPayOnline = canOpenCheckout(payment, now);
   const monthlyTariff=tariffs.find(t=>t.workspaceType==='DESK'&&t.bookingType==='SUBSCRIPTION');
-  return <Modal title={success && payment ? 'Оплата бронювання' : 'Бронювання місця'} onClose={() => { if (!busy) onClose(); }}>
-    <p className="eyebrow">Оформлення бронювання · час Києва</p>
+  return <Modal className="booking-modal" title={success && payment ? 'Оплата бронювання' : 'Бронювання місця'} onClose={() => { if (!busy) onClose(); }}>
+    <p className="eyebrow">Оформлення бронювання · <span>за Київським часом</span></p>
     {success ? <>
       <Alert success>{success}</Alert>
       {payment && paymentMethod === 'desk' ? <div className="form">

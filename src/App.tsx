@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import assets from './assets.json';
 import { api } from './api';
-import { errorMessage, hasSession } from './api/client';
+import { ApiError, errorMessage, hasSession } from './api/client';
 import type { Availability, BookingType, HistoryItem, Tariff, User, Workspace } from './api/types';
-import { bookingValidation, displayWorkspace, endTime, money, nextBookingSlot, venueTime, venueToday } from './booking';
+import { bookingValidation, displayWorkspace, endTime, isRetiredWorkspace, money, nextBookingSlot, venueTime, venueToday } from './booking';
 import { Alert, Icon, Logo, Modal, SectionTitle } from './components/ui';
 import { AuthModal } from './components/AuthModal';
 import { BookingModal } from './components/BookingModal';
@@ -15,7 +15,7 @@ import { useVenueClock } from './useVenueClock';
 
 const plans: { title: string; label: string; type: BookingType; workspaceType: 'DESK'|'MEETING_ROOM'; reference: number; unit: string; features: string[] }[] = [
   {title:'Погодинний',label:'Робоче місце',type:'HOURLY',workspaceType:'DESK',reference:150,unit:'/година',features:['Бронювання від 1 до 4 годин','Доступ у години 09:00–19:00','Кава та чай','Бездротовий інтернет і розетки']},
-  {title:'Денний',label:'Робоче місце',type:'DAILY',workspaceType:'DESK',reference:500,unit:'/день',features:['Повний день (09:00–19:00)','Можливість виходити','Зона для кави','Бездротовий інтернет і розетки']},
+  {title:'Денний',label:'Робоче місце',type:'DAILY',workspaceType:'DESK',reference:500,unit:'/день',features:['Повний день (09:00–19:00)','Зона відпочинку','Зона для кави','Бездротовий інтернет і розетки']},
   {title:'Місячний',label:'Абонемент',type:'SUBSCRIPTION',workspaceType:'DESK',reference:3500,unit:'/місяць',features:['Персональне місце','Доступ у години 09:00–19:00','Зона для кави','Бездротовий інтернет і розетки']},
   {title:'Переговорна',label:'Окрема кімната',type:'HOURLY',workspaceType:'MEETING_ROOM',reference:200,unit:'/година',features:['Лише погодинна оренда','Доступ у години 09:00–19:00','Приватність для команди','Бездротовий інтернет і розетки']},
 ];
@@ -41,13 +41,14 @@ export default function App() {
   const [start,setStart]=useState(initialSlot.start);
   const [hours,setHours]=useState(1);
   const [revision,setRevision]=useState(0);
-  const [auth,setAuth]=useState<'login'|'verify'|null>(null);
+  const [authOpen,setAuthOpen]=useState(false);
   const [profile,setProfile]=useState(false);
   const [admin,setAdmin]=useState(false);
   const [privacy,setPrivacy]=useState(false);
   const [selected,setSelected]=useState<Selected|null>(null);
   const [pending,setPending]=useState<Selected|null>(null);
   const [mobileNav,setMobileNav]=useState(false);
+  const bookableWorkspaces=workspaces.filter(workspace=>!isRetiredWorkspace(workspace));
   const validation=bookingValidation(date,start,hours,'HOURLY',now);
   useEffect(()=>{
     if(date<venueToday(now)||(date===venueToday(now)&&start<=venueTime(now).slice(0,5))){
@@ -76,34 +77,43 @@ export default function App() {
   },[]);
   useEffect(()=>{
     setAvailability([]);setAvailabilityError('');
-    if(!user||validation){setChecking(false);return;}
+    if(paymentPage||bookingsPage||authLoading||validation){setChecking(false);return;}
     const controller=new AbortController();setChecking(true);
-    api.availability(date,start,endTime(start,hours),controller.signal).then(map=>{if(!controller.signal.aborted)setAvailability(map);}).catch(err=>{if(!controller.signal.aborted)setAvailabilityError(errorMessage(err, 'Не вдалося перевірити доступність місць.'));}).finally(()=>{if(!controller.signal.aborted)setChecking(false);});
+    api.availability(date,start,endTime(start,hours),controller.signal,!!user)
+      .then(map=>{if(!controller.signal.aborted)setAvailability(map);})
+      .catch(err=>{
+        if(controller.signal.aborted)return;
+        setAvailabilityError(!user && err instanceof ApiError && (err.status===401||err.status===403)
+          ? 'Перегляд доступності без входу наразі недоступний.'
+          : errorMessage(err, 'Не вдалося перевірити доступність місць.'));
+      })
+      .finally(()=>{if(!controller.signal.aborted)setChecking(false);});
     return()=>controller.abort();
-  },[user?.id,date,start,hours,validation,revision]);
+  },[user?.id,date,start,hours,validation,revision,paymentPage,bookingsPage,authLoading]);
   async function loggedIn(){const u=await api.me();setUser(u);setSessionError('');setAuthLoading(false);if(pending){setSelected(pending);setPending(null);}}
-  function choose(workspace:Workspace|undefined,type:BookingType='HOURLY',settings?:Partial<Selected>){const choice={workspace,type,date,start,hours,...settings};if(!user){setPending(choice);setAuth('login');}else setSelected(choice);}
+  function choose(workspace:Workspace|undefined,type:BookingType='HOURLY',settings?:Partial<Selected>){const choice={workspace,type,date,start,hours,...settings};if(!user){setPending(choice);setAuthOpen(true);}else setSelected(choice);}
   function planChoice(type:BookingType,workspaceType:'DESK'|'MEETING_ROOM'){
     // A desk tariff describes a format, not a particular desk. Require an explicit choice.
-    const workspace=workspaceType==='MEETING_ROOM'?workspaces.find(w=>w.type==='MEETING_ROOM'):undefined;
-    if(workspaces.some(w=>w.type===workspaceType))choose(workspace,type);
+    const workspace=workspaceType==='MEETING_ROOM'?bookableWorkspaces.find(w=>w.type==='MEETING_ROOM'):undefined;
+    if(bookableWorkspaces.some(w=>w.type===workspaceType))choose(workspace,type);
     else document.getElementById('booking')?.scrollIntoView({behavior:'smooth'});
   }
   const price=(workspaceType:'DESK'|'MEETING_ROOM',type:BookingType,fallback:number) => type==='SUBSCRIPTION'?3500:tariffs.find(t=>t.workspaceType===workspaceType&&t.bookingType===type)?.price??fallback;
-  const room=workspaces.find(w=>w.type==='MEETING_ROOM');
-  const desks=workspaces.filter(w=>w.type==='DESK');
+  const room=bookableWorkspaces.find(w=>w.type==='MEETING_ROOM');
+  const desks=bookableWorkspaces.filter(w=>w.type==='DESK');
   const navLinks=nav.map(([id,label])=><a key={id} href={`#${id}`} onClick={()=>setMobileNav(false)}>{label}</a>);
   function deskCard(workspace:Workspace|undefined,index:number){
     const state=workspace?availability.find(w=>w.id===workspace.id):undefined;
     const free=state?.isAvailable;
-    return <button key={workspace?.id??`placeholder-${index}`} className={`desk ${free===true?'free':free===false?'occupied':'unknown'}`} style={{gridArea:index<6?`desk${index+1}`:undefined}} disabled={!workspace||free===false||checking||!!validation} onClick={()=>workspace&&choose(workspace)} aria-label={`${workspace?displayWorkspace(workspace):`Робоче місце №${index+1}`}: ${free===true?'вільний':free===false?'недоступний':'обрати місце'}`}><span className="desk-number">{index+1}</span><strong>{workspace?displayWorkspace(workspace):`Робоче місце №${index+1}`}</strong><small>{checking?'Перевіряємо':free===true?'Вільний':free===false?'Недоступний':!workspace?'Немає даних':'Обрати місце'}</small></button>;
+    const status=checking?'Перевіряємо':free===true?'Вільний':free===false?'Недоступний':'Немає даних';
+    const label=workspace?displayWorkspace(workspace):`Робоче місце №${index+1}`;
+    return <button key={workspace?.id??`placeholder-${index}`} className={`desk ${free===true?'free':free===false?'occupied':'unknown'}`} style={{gridArea:index<6?`desk${index+1}`:undefined}} disabled={!workspace||free===false||checking||!!validation} onClick={()=>workspace&&choose(workspace)} aria-label={`${label}: ${status.toLocaleLowerCase('uk')}`}><span className="desk-number">{index+1}</span><strong>{label}</strong><small>{status}</small></button>;
   }
   const roomFree=room?availability.find(w=>w.id===room.id)?.isAvailable:undefined;
-  const authDialog = auth && <AuthModal initial={auth} email={auth === 'verify' ? user?.email : ''} onClose={() => { setAuth(null); setPending(null); }} onLogin={loggedIn} />;
-  const bookingDialog = selected && user && <BookingModal {...selected} workspaces={workspaces} initialType={selected.type} initialDate={selected.date} initialStart={selected.start} initialHours={selected.hours} user={user} tariffs={tariffs} onClose={() => setSelected(null)} onCreated={() => setRevision(value => value + 1)} />;
+  const authDialog = authOpen && <AuthModal onClose={() => { setAuthOpen(false); setPending(null); }} onLogin={loggedIn} />;
+  const bookingDialog = selected && user && <BookingModal {...selected} workspaces={bookableWorkspaces} initialType={selected.type} initialDate={selected.date} initialStart={selected.start} initialHours={selected.hours} user={user} tariffs={tariffs} onClose={() => setSelected(null)} onCreated={() => setRevision(value => value + 1)} />;
   const profileView = user && <ProfileModal standalone={bookingsPage} user={user}
     onUser={setUser} onLogoutError={setSessionError} onClose={() => setProfile(false)}
-    onVerify={() => { setProfile(false); setAuth('verify'); }}
     onRepeat={(workspace: Workspace, item: HistoryItem) => {
       setProfile(false);
       const hours = item.startTime && item.endTime
@@ -117,11 +127,11 @@ export default function App() {
         <h1>{paymentPage ? 'Результат оплати' : 'Мої бронювання'}</h1>
         {sessionError && <Alert>{sessionError}</Alert>}
         {paymentPage ? <>
-          <PaymentReturn user={user} authLoading={authLoading} onLogin={() => setAuth('login')} dedicated />
+          <PaymentReturn user={user} authLoading={authLoading} onLogin={() => setAuthOpen(true)} dedicated />
           <a className="btn outline" href={myBookingsPath}>Мої бронювання</a>
         </> : user ? profileView : authLoading
           ? <p role="status">Завантажуємо профіль…</p>
-          : <p><button className="text-button" onClick={() => setAuth('login')}>Увійдіть</button>, щоб переглянути бронювання.</p>}
+          : <p><button className="text-button" onClick={() => setAuthOpen(true)}>Увійдіть</button>, щоб переглянути бронювання.</p>}
       </main>
       {authDialog}
       {bookingDialog}
@@ -129,10 +139,10 @@ export default function App() {
   }
   return <>
     <a className="skip" href="#main">Перейти до вмісту</a>
-    <header className="container header" id="home"><Logo/><button className="mobile-menu btn outline small" aria-label="Відкрити меню" aria-expanded={mobileNav} onClick={()=>setMobileNav(v=>!v)}>Меню</button><nav className={mobileNav?'expanded':''} aria-label="Головна навігація">{navLinks}</nav><div className="header-actions">{user?.role==='ADMIN'&&<button className="btn outline small" onClick={()=>setAdmin(true)}>Адмін-панель</button>}<button className="btn outline small" disabled={authLoading} onClick={()=>user?setProfile(true):setAuth('login')}>{authLoading?'Зачекайте…':user?'Мій профіль':'Увійти'}</button></div></header>
+    <header className="container header" id="home"><Logo/><button className="mobile-menu btn outline small" aria-label="Відкрити меню" aria-expanded={mobileNav} onClick={()=>setMobileNav(v=>!v)}>Меню</button><nav className={mobileNav?'expanded':''} aria-label="Головна навігація">{navLinks}</nav><div className="header-actions">{user?.role==='ADMIN'&&<button className="btn outline small" onClick={()=>setAdmin(true)}>Адмін-панель</button>}<button className="btn outline small" disabled={authLoading} onClick={()=>user?setProfile(true):setAuthOpen(true)}>{authLoading?'Зачекайте…':user?'Мій профіль':'Увійти'}</button></div></header>
     <main id="main" className="container">
       {sessionError && <Alert>{sessionError}</Alert>}
-      <PaymentReturn user={user} authLoading={authLoading} onLogin={() => setAuth('login')} />
+      <PaymentReturn user={user} authLoading={authLoading} onLogin={() => setAuthOpen(true)} />
       <section className="hero" aria-labelledby="hero-title"><h1 id="hero-title">Твій хаб — простір для твоїх ідей!</h1><p>Сучасний коворкінг із домашнім затишком. Гарантований інтернет, безперебійне світло та спільнота, з якою рости приємніше.</p><div className="hero-actions"><a className="btn" href="#booking">Забронювати місце<Icon name="imgIconCalendar2"/></a><a className="btn outline" href="#services">Оглянути приміщення</a></div><div className="hero-image"><img src={assets.imgImageContainer1} alt="Затишний спільний робочий простір Твій хаб" fetchPriority="high"/></div></section>
       <section id="services"><SectionTitle title="Наші послуги" description="У нас є 2 комфортні зони для ваших завдань — для глибокого фокусу або важливих переговорів."/><div className="services-grid">
         <article className="service-card"><div className="service-image meeting-image"><img src={assets.imgImageContainer} alt="Команда за столом у приватній переговорній" loading="lazy"/></div><h3>Окрема переговорна кімната</h3><p>Простір для проведення онлайн-зустрічей, переговорів з клієнтами, командних обговорень та презентацій.</p><ul className="checks"><li><Icon name="imgIconCheck"/>Приватність</li><li><Icon name="imgIconCheck"/>Розетки</li></ul><div className="card-bottom"><div><small>{tariffs.length?'Вартість':'Орієнтовна вартість'}</small><strong>{money(price('MEETING_ROOM','HOURLY',200))}<small> / година</small></strong></div><button className="btn" onClick={()=>planChoice('HOURLY','MEETING_ROOM')}>Забронювати<Icon name="imgIconCalendar"/></button></div></article>
@@ -142,9 +152,9 @@ export default function App() {
         <div className="booking-controls"><label>Дата<input type="date" value={date} min={venueToday(now)} onChange={e=>setDate(e.target.value)}/></label><label>Початок<select value={start} onChange={e=>setStart(e.target.value)}>{Array.from({length:10},(_,i)=>`${String(i+9).padStart(2,'0')}:00`).map(t=><option key={t} disabled={!!bookingValidation(date,t,1,'HOURLY',now)}>{t}</option>)}</select></label><label>Тривалість<select value={hours} onChange={e=>setHours(Number(e.target.value))}>{[1,2,3,4].map(h=><option key={h} value={h} disabled={!!bookingValidation(date,start,h,'HOURLY',now)}>{h} год.</option>)}</select></label><button className="btn outline small" disabled={checking||catalogLoading} onClick={()=>setRevision(v=>v+1)}>Оновити</button></div>
 
         {validation&&<Alert>{validation}</Alert>}{catalogError&&<Alert>{catalogError}</Alert>}{availabilityError&&<Alert>{availabilityError}</Alert>}
-        {!user&&!catalogError&&<p className="booking-signin"><button className="text-button" onClick={()=>setAuth('login')}>Увійдіть</button>, щоб перевірити доступність і забронювати місце.</p>}
+        {!user&&!authLoading&&!catalogError&&<p className="booking-signin"><button className="text-button" onClick={()=>choose(undefined)}>Забронювати місце</button></p>}
         {catalogLoading&&<p role="status" className="booking-signin">Завантажуємо простір…</p>}
-        <p className="booking-signin">Доступність для {date}, {start}–{endTime(start,hours)} · час Києва</p><div className="legend"><span><i className="free"/>Вільний стіл</span><span><i className="occupied"/>Недоступно</span></div>
+        <p className="booking-signin">Доступність для {date}, {start}–{endTime(start,hours)} за Київським часом</p><div className="legend"><span><i className="free"/>Вільний стіл</span><span><i className="occupied"/>Недоступно</span></div>
         <div className="booking-grid"><article className="meeting-card"><div className="meeting-heading"><div><p className="eyebrow">Окрема зона</p><h3>Переговорна кімната</h3></div><span className="icon-circle"><Icon name="imgIconPeople"/></span></div><ul className="room-features"><li><Icon name="imgGroup2"/>Безперервний інтернет</li><li><Icon name="imgIconLight"/>Світло 24/7</li><li><Icon name="imgIconCoffee"/>Кава та чай у вільному доступі</li><li><Icon name="imgIconGroup"/>Приватний простір для команди</li></ul><div className="card-bottom"><div><small>{tariffs.length?'Вартість':'Орієнтовна вартість'}</small><strong>{money(price('MEETING_ROOM','HOURLY',200))}<small> / година</small></strong></div><button className="btn" disabled={!room||roomFree===false||checking||!!validation} onClick={()=>room&&choose(room)}>Обрати</button></div>{roomFree===false&&<small className="danger">Недоступна у вибраний час</small>}</article>
         <div className="floorplan"><h3>{desks.length?`Робочі місця (${desks.length})`:"Схема робочих місць"}</h3><div className={`desk-map ${desks.length>5?'extra-desks':''}`}><div className="rest rest-left">Зона відпочинку</div>{(desks.length?desks:Array.from({length:5},()=>undefined)).map(deskCard)}<div className="rest rest-right">Зона відпочинку</div></div></div></div>
       </section>

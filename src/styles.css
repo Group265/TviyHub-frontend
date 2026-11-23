@@ -10,7 +10,11 @@
 .admin-filters label{flex:1 1 225px}
 .admin-filters input,.admin-filters select{width:100%}
 .status.active{color:#17633d;background:#e5f6ed}
-.admin-payment-actions{gap:4px 12px;margin-top:4px}
+.admin-payment-actions{gap:4px 12px;margin-top:4px;justify-content:center}
+.admin-sort-cell{text-align:center}
+.admin-sort-button{display:flex;width:100%;justify-content:center;align-items:center;gap:5px;white-space:nowrap;padding:0;border:0;background:none;color:inherit;text-transform:inherit}
+.admin-sort-button:hover,th[aria-sort] .admin-sort-button{color:#343a40}
+.admin-sort-button span{font-size:14px;line-height:1}
 
 .checkout-page{margin-top:28px;margin-bottom:48px;padding:clamp(16px,4vw,36px);background:#fff;border:1px solid var(--border);border-radius:20px}
 .checkout-page h1{margin:0 0 20px;font-size:clamp(1.65rem,4vw,2.35rem)}
@@ -23,3 +27,30 @@
 .payment-option:has(input:disabled){cursor:default;color:var(--muted)}
 .form .payment-option input{width:1rem;height:1rem;flex:0 0 1rem;margin:0;padding:0;accent-color:var(--orange)}
 .booking-payment-options p{margin:0}
+
+.booking-modal{overflow:hidden}
+.booking-modal .modal-inner{max-height:inherit;overflow:auto;overscroll-behavior:contain}
+.booking-modal .eyebrow span{text-transform:none}
+.booking-modal .form select{
+  appearance:none;
+  padding-inline-end:40px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23212529' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 16px center;
+  background-size:16px 16px;
+}
+.booking-modal input[type="date"]::-webkit-calendar-picker-indicator{width:16px;height:16px;padding:0;margin:0}
+@media (forced-colors:active){
+  .booking-modal .form select{appearance:auto;background-image:none}
+}
+
+.desk-map .rest{
+  background-color:#57453a;
+  background-image:linear-gradient(transparent,rgb(0 0 0 / .5) 36% 64%,transparent),var(--rest-photo);
+  background-position:center;
+  background-size:cover;
+  color:#fff;
+  text-shadow:0 1px 3px #000;
+}
+.rest-left{--rest-photo:url('/assets/imgPhotoContainer.png')}
+.rest-right{--rest-photo:url('/assets/rest-zone-coffee.png')}

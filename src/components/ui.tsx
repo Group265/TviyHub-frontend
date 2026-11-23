@@ -30,11 +30,11 @@ export const ukrainianFormValidation = {
   },
 };
 
-export function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
+export function Modal({ title, children, onClose, wide = false, className }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { dialog.close(); document.body.style.overflow = previous; }; }, []);
-  return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}`} aria-labelledby={id} onCancel={e => {e.preventDefault();onClose();}} onClick={e => {if(e.target===e.currentTarget)onClose();}}>
+  return <dialog ref={ref} className={['modal', wide && 'modal-wide', className].filter(Boolean).join(' ')} aria-labelledby={id} onCancel={e => {e.preventDefault();onClose();}} onClick={e => {if(e.target===e.currentTarget)onClose();}}>
     <div className="modal-inner"><button type="button" className="close" aria-label="Закрити" onClick={onClose}><Icon name="imgIconClose"/></button><h2 id={id}>{title}</h2>{children}</div>
   </dialog>;
 }

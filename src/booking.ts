@@ -52,7 +52,7 @@ export function bookingPaymentWindow(booking: PaymentSchedule) {
 
 export function paymentDeadlineText(deadline: string): string {
   const [date, time] = deadline.split('T');
-  return `Сплатіть до ${date.split('-').reverse().join('.')} о ${time.endsWith(':00') ? time.slice(0, 5) : time} за часом Києва.`;
+  return `Сплатіть до ${date.split('-').reverse().join('.')} о ${time.endsWith(':00') ? time.slice(0, 5) : time} за Київським часом.`;
 }
 
 export function bookingDisplayStatus(booking: BookingSchedule, now: string): string {
@@ -89,7 +89,7 @@ export function bookingValidation(date: string, start: string, hours: number, ty
   if (type === 'SUBSCRIPTION') return null;
   if (isWeekend(date)) return 'Бронювання на вихідних недоступне. Оберіть будній день.';
   if (type === 'HOURLY' && (!/^\d{2}:00$/.test(start) || hours < 1 || hours > 4 || !Number.isInteger(hours) || Number(start.slice(0,2)) < 9 || Number(start.slice(0,2)) + hours > 19)) return 'Оберіть від 1 до 4 годин у межах 09:00–19:00.';
-  if (date === venueToday(now) && (type === 'DAILY' ? '09:00:00' : `${start}:00`) <= venueTime(now)) return type === 'DAILY' ? 'Повний день починається о 09:00. Оберіть майбутній день або погодинне бронювання.' : 'Цей час уже минув або розпочався. Оберіть майбутню годину (час Києва).';
+  if (date === venueToday(now) && (type === 'DAILY' ? '09:00:00' : `${start}:00`) <= venueTime(now)) return type === 'DAILY' ? 'Повний день починається о 09:00. Оберіть майбутній день або погодинне бронювання.' : 'Цей час уже минув або розпочався. Оберіть майбутню годину за Київським часом.';
   return null;
 }
 export function bookingPayload(workspaceId: number, type: 'HOURLY' | 'DAILY', date: string, start: string, hours: number): BookingRequest {
@@ -103,6 +103,10 @@ export function displayWorkspace(workspace: Omit<Workspace, 'type'> & { type?: W
   }
   if (number) return `Робоче місце №${number}`;
   return name && !/\p{Script=Latin}/u.test(name) ? name : `Робоче місце №${workspace.id}`;
+}
+
+export function isRetiredWorkspace(workspace: Workspace): boolean {
+  return workspace.type === 'DESK' && displayWorkspace(workspace) === 'Робоче місце №6';
 }
 
 export const money = (value: number) => `${new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(Number(value))} грн`;

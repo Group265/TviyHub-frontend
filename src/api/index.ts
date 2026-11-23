@@ -20,11 +20,11 @@ export const api = {
   updateName: (name: string) => request<User>('/users/me', json('PATCH', { name }), true),
   requestChange: (kind: 'email' | 'phone' | 'password', data: unknown) => request<void>(`/users/me/${kind}/request`, json('POST', data), true),
   confirmChange: (kind: 'email' | 'phone' | 'password', code: string) => request<User | void>(`/users/me/${kind}/confirm`, json('POST', { code }), true),
-  availability: (date: string, startTime?: string, endTime?: string, signal?: AbortSignal) => {
+  availability: (date: string, startTime?: string, endTime?: string, signal?: AbortSignal, authenticated = true) => {
     const query = new URLSearchParams({ date });
     if (startTime) query.set('startTime', startTime);
     if (endTime) query.set('endTime', endTime);
-    return request<Availability[]>(`/bookings/availability?${query}`, { signal }, true);
+    return request<Availability[]>(`/bookings/availability?${query}`, { signal }, authenticated);
   },
   price: (data: BookingRequest, signal?: AbortSignal) => request<number>('/bookings/calculate-price', { ...json('POST', data), signal }, true),
   book: (data: BookingRequest) => request<Booking[]>('/bookings', json('POST', data), true),

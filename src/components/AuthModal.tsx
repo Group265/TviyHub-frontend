@@ -3,9 +3,9 @@ import { api } from '../api';
 import { errorMessage, passwordsMismatch, phoneFormatError, requiredFieldMessage } from '../api/errors';
 import { Alert, Modal, ukrainianFormValidation } from './ui';
 
-export function AuthModal({ onClose, onLogin, initial = 'login', email: initialEmail = '' }: { onClose: () => void; onLogin: () => Promise<void>; initial?: 'login' | 'verify'; email?: string }) {
-  const [mode,setMode] = useState<'login' | 'register' | 'verify' | 'forgot' | 'reset'>(initial);
-  const [email,setEmail] = useState(initialEmail);
+export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin: () => Promise<void> }) {
+  const [mode,setMode] = useState<'login' | 'register' | 'verify' | 'forgot' | 'reset'>('login');
+  const [email,setEmail] = useState('');
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
   const [message,setMessage] = useState('');
@@ -101,6 +101,6 @@ export function AuthModal({ onClose, onLogin, initial = 'login', email: initialE
     </form>
     {mode==='verify' && <button type="button" disabled={busy} className="text-button centered" onClick={resend}>Надіслати код повторно</button>}
     <button className="text-button centered muted" disabled={busy} onClick={()=>change(mode==='login'?'register':'login')}>{mode==='login'?'Немає облікового запису? Зареєструватися':'Уже маєте обліковий запис? Увійти'}</button>
-    {mode==='login' && <button className="text-button centered muted" disabled={busy} onClick={()=>change('verify')}>Підтвердити пошту кодом</button>}
+    {mode==='register' && <button className="text-button centered muted" disabled={busy} onClick={()=>change('verify')}>Уже маєте код? Завершити реєстрацію</button>}
   </Modal>;
 }

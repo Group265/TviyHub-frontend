@@ -60,7 +60,7 @@ const messagePatterns: [RegExp, (...values: string[]) => string][] = [
   [/^The hub is fully rented for an event on (\d{4}-\d{2}-\d{2})$/, date => `На ${date} весь простір заброньовано для події. Оберіть іншу дату.`],
   [/^The hub is closed on (\d{4}-\d{2}-\d{2}) \(holiday, repair or special event\)$/, date => `На ${date} простір зачинено. Оберіть іншу дату.`],
   [/^The hub is closed on weekends \((\d{4}-\d{2}-\d{2})\)\. Booking is unavailable\.$/, date => `${date} простір зачинено. Оберіть будній день.`],
-  [/^Clients can only book between (\d{2}:\d{2}) and (\d{2}:\d{2})$/, (start, end) => `Бронювання доступне з ${start} до ${end} за київським часом.`],
+  [/^Clients can only book between (\d{2}:\d{2}) and (\d{2}:\d{2})$/, (start, end) => `Бронювання доступне з ${start} до ${end} за Київським часом.`],
   [/^Hourly booking must be between (\d+) and (\d+) hours$/, (min, max) => `Тривалість погодинного бронювання має бути від ${min} до ${max} год.`],
   [/^HOURLY bookings can only be cancelled at least (\d+) hours before the start time$/, hours => `Погодинне бронювання можна скасувати щонайменше за ${hours} год. до початку.`],
   [/^DAILY bookings can only be cancelled at least (\d+) hours before the start time$/, hours => `Денне бронювання можна скасувати щонайменше за ${hours} год. до початку.`],
