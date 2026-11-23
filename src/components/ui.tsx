@@ -3,13 +3,9 @@ import assets from '../assets.json';
 import { requiredFieldMessage } from '../api/errors';
 
 export function Icon({ name }: { name: keyof typeof assets }) { return <img className="icon" src={assets[name]} alt="" aria-hidden="true" />; }
-const logoLayers: [keyof typeof assets, number, number][] = [
-  ['imgVector',32.38,0],['imgVector1',13.64,1.9],['imgVector2',4.09,8.6],['imgVector3',53.76,21.28],['imgVector4',60.9,36.32],['imgVector5',24.44,20.06],['imgVector6',56.91,27.76],['imgVector7',70.29,33.98],['imgVector8',64.86,38.25],
-];
 export function Logo({ href = '#home' }: { href?: string } = {}) {
-  return <a href={href} className="logo" aria-label="Твій хаб — на початок">
-    {logoLayers.map(([name,left,top]) => <img key={name} src={assets[name]} alt="" style={{left,top}} />)}
-    <span className="logo-wordmark" aria-hidden="true"><span>Твій</span> хаб</span>
+  return <a href={href} className="logo" aria-label="tviy.hub — на початок">
+    <img src="/assets/tviy-hub-logo.png" alt="" width={1975} height={2048} />
   </a>;
 }
 
