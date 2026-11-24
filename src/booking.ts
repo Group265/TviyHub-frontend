@@ -73,6 +73,15 @@ export function canCancelBooking(booking: BookingSchedule, now: string): boolean
 export function isCurrentSubscription(subscription: Pick<Subscription, 'status' | 'endDate'>, today: string): boolean {
   return (subscription.status === 'ACTIVE' || subscription.status === 'PENDING_PAYMENT') && subscription.endDate >= today;
 }
+export function canUserCancelSubscription(subscription: Pick<Subscription, 'status' | 'startDate'>, now: string): boolean {
+  const canCancelStatus = subscription.status === 'ACTIVE' || subscription.status === 'PENDING_PAYMENT';
+  return canCancelStatus && bookingDateTime(followingDay(now.slice(0, 10)), now.slice(11)) < bookingDateTime(subscription.startDate, bookingOpenTime);
+}
+
+export function canAdminCancelSubscription(subscription: Pick<Subscription, 'status'>): boolean {
+  return subscription.status === 'ACTIVE' || subscription.status === 'PENDING_PAYMENT';
+}
+
 
 function followingDay(date: string): string {
   const day = new Date(`${date}T12:00:00Z`); day.setUTCDate(day.getUTCDate() + 1); return day.toISOString().slice(0,10);

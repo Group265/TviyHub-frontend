@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { bookingAlreadyStartedError, errorMessage } from '../api/errors';
 import type { AdminUser, Booking, InPersonPaymentMethod, Page, Payment, Subscription, Workspace } from '../api/types';
-import { bookingDisplayStatus, bookingTypeText, canCancelBooking, displayWorkspace, money, roleText, statusText, venueDateTime } from '../booking';
+import { bookingDisplayStatus, bookingTypeText, canAdminCancelSubscription, canCancelBooking, displayWorkspace, money, roleText, statusText, venueDateTime } from '../booking';
 import { Alert, Modal, Pager } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
@@ -16,7 +16,9 @@ type UserSort = 'recent' | 'name';
 type Action =
   | { type: 'user'; user: AdminUser; blocked: boolean }
   | { type: 'payment'; booking: Booking; payment: Payment; method: InPersonPaymentMethod }
-  | { type: 'cancel'; booking: Booking };
+  | { type: 'refund'; label: string; payment: Payment }
+  | { type: 'cancel'; booking: Booking }
+  | { type: 'cancelSubscription'; subscription: Subscription };;
 
 const paymentOrder: Record<string, number> = { UNPAID: 1, PAID: 2, REFUND_PENDING: 3, REFUNDED: 4 };
 const collator = new Intl.Collator('uk', { sensitivity: 'base', numeric: true });
@@ -37,7 +39,11 @@ function SortHeader({ label, direction, onSort, disabled }: {
 }
 
 function confirmationText(action: Action): string {
+  if (action.type === 'cancelSubscription') return 'Скасувати абонемент №' + action.subscription.id + '?';
   if (action.type === 'cancel') return 'Скасувати бронювання №' + action.booking.id + '?';
+  if (action.type === 'refund') {
+    return 'Підтвердити повернення ' + money(action.payment.amount) + ' за ' + action.label + '?';
+  }
   if (action.type === 'payment') {
     const method = action.method === 'CASH' ? 'готівкою' : 'карткою через термінал';
     return 'Підтвердити отримання ' + money(action.payment.amount) + ' ' + method + ' за бронювання №' + action.booking.id + '?';
@@ -97,10 +103,9 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
         return;
       }
 
-      const [rows, transactions] = tab === 'bookings'
-        ? await Promise.all([api.bookings(signal), api.adminPayments(signal)])
-        : [[], []];
-      const subscriptionRows = tab === 'subscriptions' ? await api.adminSubscriptions(signal) : [];
+      const [rows, subscriptionRows, transactions] = tab === 'bookings'
+        ? await Promise.all([api.bookings(signal), Promise.resolve([]), api.adminPayments(signal)])
+        : await Promise.all([Promise.resolve([]), api.adminSubscriptions(signal), api.adminPayments(signal)]);
       const entries = tab === 'subscriptions' ? subscriptionRows : rows;
       const clientRows = await api.adminClients(entries.map(item => item.userId), signal);
       if (signal.aborted) return;
@@ -123,6 +128,9 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
 
   const bookingPayments = useMemo(() => new Map(payments.filter(payment => payment.bookingId != null)
     .map(payment => [payment.bookingId, payment])), [payments]);
+
+  const subscriptionPayments = useMemo(() => new Map(payments.filter(payment => payment.subscriptionId != null)
+    .map(payment => [payment.subscriptionId, payment])), [payments]);
 
   const sortedBookings = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('uk');
@@ -221,6 +229,13 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
         const updated = await api.updatePayment(confirm.payment.id, confirm.method);
         if (updated?.status !== 'PAID') throw new Error('Missing payment confirmation');
         setNotice('Оплату бронювання №' + confirm.booking.id + ' підтверджено.');
+      } else if (confirm.type === 'refund') {
+        const updated = await api.confirmRefund(confirm.payment.id);
+        if (updated?.status !== 'REFUNDED') throw new Error('Missing refund confirmation');
+        setNotice('Повернення коштів за ' + confirm.label + ' підтверджено.');
+      } else if (confirm.type === 'cancelSubscription') {
+        await api.adminCancelSubscription(confirm.subscription.id);
+        setNotice('Абонемент №' + confirm.subscription.id + ' скасовано.');
       } else {
         await api.cancel(confirm.booking.id);
         setNotice('Бронювання №' + confirm.booking.id + ' скасовано.');
@@ -230,7 +245,9 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
       onChanged();
     } catch (err) {
       const fallback = confirm.type === 'user' ? 'Не вдалося змінити статус користувача.' :
-        confirm.type === 'payment' ? 'Не вдалося підтвердити оплату.' : 'Не вдалося скасувати бронювання.';
+        confirm.type === 'payment' ? 'Не вдалося підтвердити оплату.' :
+        confirm.type === 'refund' ? 'Не вдалося підтвердити повернення коштів.' :
+        confirm.type === 'cancelSubscription' ? 'Не вдалося скасувати абонемент.' : 'Не вдалося скасувати бронювання.';
       setError(errorMessage(err, fallback));
     } finally {
       setBusy(false);
@@ -282,17 +299,24 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
       </table></div> : <p className="empty">Користувачів не знайдено.</p> :
       tab === 'subscriptions' ?
       visibleSubscriptions.length ? <div className="table-scroll"><table>
-        <thead><tr><th scope="col">№ абонемента</th><th>Клієнт</th><th>Місце</th><th>Період</th>{sortHeaders}</tr></thead>
+        <thead><tr><th scope="col">№ абонемента</th><th>Клієнт</th><th>Місце</th><th>Період</th>{sortHeaders}<th>Дії</th></tr></thead>
         <tbody>{visibleSubscriptions.map(item => {
           const client = clients[item.userId];
           const workspace = workspaces.find(workspace => workspace.id === item.workspaceId);
+          const payment = subscriptionPayments.get(item.id);
+          const canRefund = payment?.status === 'REFUND_PENDING';
           return <tr key={item.id}>
             <td>№{item.id}</td>
             <td>{clientName(item.userId, client)}<small>{client?.phone}</small></td>
             <td>{displayWorkspace(workspace ?? { id: item.workspaceId, name: '' })}</td>
             <td>{item.startDate} — {item.endDate}</td>
             <td className="admin-sort-cell">{statusText(item.status)}</td>
-            <td className="admin-sort-cell">{statusText(item.paymentStatus)}</td>
+            <td className="admin-sort-cell">{statusText(payment?.status ?? item.paymentStatus)}
+              {canRefund && <div className="actions admin-payment-actions">
+                <button className="text-button" disabled={busy} onClick={() => ask({ type: 'refund', label: 'абонемент №' + item.id, payment })}>Підтвердити повернення</button>
+              </div>}
+            </td>
+            <td>{canAdminCancelSubscription(item) && <button className="text-button danger" disabled={busy} onClick={() => ask({ type: 'cancelSubscription', subscription: item })}>Скасувати</button>}</td>
           </tr>;
         })}</tbody>
       </table></div> : <p className="empty">Абонементів не знайдено.</p> :
@@ -304,6 +328,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
           const status = bookingDisplayStatus(booking, now);
           const statusClass = status === 'CANCELLED' ? 'cancelled' : status === 'COMPLETED' ? 'completed' : '';
           const canRecordPayment = payment?.status === 'UNPAID' && payment.paymentMethod !== 'STRIPE' && canCancelBooking(booking, now);
+          const canRefund = payment?.status === 'REFUND_PENDING';
           return <tr key={booking.id}>
             <td>№{booking.id}</td>
             <td>{booking.bookingDate}<small>{booking.startTime?.slice(0, 5)}–{booking.endTime?.slice(0, 5)}</small></td>
@@ -315,6 +340,9 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
               {canRecordPayment && <div className="actions admin-payment-actions">
                 <button className="text-button" disabled={busy} onClick={() => ask({ type: 'payment', booking, payment, method: 'CASH' })}>Готівка</button>
                 <button className="text-button" disabled={busy} onClick={() => ask({ type: 'payment', booking, payment, method: 'CARD' })}>Термінал</button>
+              </div>}
+              {canRefund && <div className="actions admin-payment-actions">
+                <button className="text-button" disabled={busy} onClick={() => ask({ type: 'refund', label: 'бронювання №' + booking.id, payment })}>Підтвердити повернення</button>
               </div>}
             </td>
             <td>{canCancelBooking(booking, now) && <button className="text-button danger" disabled={busy} onClick={() => ask({ type: 'cancel', booking })}>Скасувати</button>}</td>

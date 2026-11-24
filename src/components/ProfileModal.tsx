@@ -4,7 +4,7 @@ import { clearSession, logout } from '../api/client';
 import { bookingAlreadyStartedError, errorMessage, passwordsMismatch } from '../api/errors';
 import type { Booking, HistoryItem, Page, Subscription, User, Workspace } from '../api/types';
 import {
-  bookingCloseTime, bookingDisplayStatus, bookingOpenTime, bookingPaymentWindow, canCancelBooking, displayWorkspace,
+  bookingCloseTime, bookingDisplayStatus, bookingOpenTime, bookingPaymentWindow, canCancelBooking, canUserCancelSubscription, displayWorkspace,
   isCurrentSubscription, isRetiredWorkspace, isUpcomingBooking, money, paymentDeadlineText, statusText, venueDateTime,
 } from '../booking';
 import { getPaymentId, startCheckout } from '../checkout';
@@ -37,6 +37,9 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const [cancelError,setCancelError]=useState('');
   const [cancelNotice,setCancelNotice]=useState('');
   const [confirmCancel,setConfirmCancel]=useState<HistoryItem|null>(null);
+  const [confirmCancelSub, setConfirmCancelSub] = useState<Subscription | null>(null);
+  const [subCancelError, setSubCancelError] = useState('');
+  const [subCancelNotice, setSubCancelNotice] = useState('');
   const [paymentError,setPaymentError] = useState('');
   const [paymentBookings,setPaymentBookings] = useState<Map<number, Booking> | null>(null);
   const leavingForCheckout = useRef(false);
@@ -53,6 +56,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
     : history?.content ?? [];
   const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
   const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
+  const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
   const serverPage = scope === 'upcoming' ? 0 : page;
   const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
     (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
@@ -115,6 +119,9 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   useEffect(() => {
     if (confirmCancel && !canConfirmCancel) setConfirmCancel(null);
   }, [confirmCancel, canConfirmCancel]);
+  useEffect(() => {
+    if (confirmCancelSub && !canConfirmCancelSub) setConfirmCancelSub(null);
+  }, [confirmCancelSub, canConfirmCancelSub]);
   function checkPasswordReuse(event: FormEvent<HTMLInputElement>) {
     const form = event.currentTarget.form;
     if (!form) return;
@@ -169,6 +176,27 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       setCancelNotice('Бронювання скасовано.');
     } catch (err) {
       setCancelError(errorMessage(err, 'Не вдалося скасувати бронювання.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function cancelSubscription(sub: Subscription) {
+    if (busy) return;
+    setSubCancelError('');
+    setSubCancelNotice('');
+    if (!canUserCancelSubscription(sub, venueDateTime())) {
+      setConfirmCancelSub(null);
+      setSubCancelError('Абонемент можна скасувати щонайменше за 24 години до початку.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.cancelSubscription(sub.id);
+      setConfirmCancelSub(null);
+      setRevision(v => v + 1);
+      setSubCancelNotice('Абонемент скасовано.');
+    } catch (err) {
+      setSubCancelError(errorMessage(err, 'Не вдалося скасувати абонемент.'));
     } finally {
       setBusy(false);
     }
@@ -274,9 +302,27 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       <Pager page={visiblePage} total={totalPages} change={setPage}/>
     </>}
     {canConfirmCancel&&<div className="confirm-panel"><p>Скасувати бронювання №{confirmCancel.id}?</p><div className="actions"><button className="btn small" disabled={busy} onClick={()=>cancel(confirmCancel)}>Так, скасувати</button><button className="btn outline small" onClick={()=>setConfirmCancel(null)}>Залишити</button></div></div>}
-    {subscriptionError && <Alert>{subscriptionError}</Alert>}
-    {activeSubscriptions.length>0&&<><h3>Активні та майбутні абонементи</h3><div className="table-scroll"><table><thead><tr><th>Місце</th><th>Період</th><th>Статус</th></tr></thead><tbody>{activeSubscriptions.map(sub=><tr key={sub.id}><td>Місце №{sub.workspaceId}</td><td>{sub.startDate} — {sub.endDate}</td><td>{statusText(sub.status)}<small>{statusText(sub.paymentStatus)}</small></td></tr>)}</tbody></table></div></>}
-    <p className="muted small-copy">Погодинну бронь можна скасувати щонайменше за 2 години, денну — за добу.</p>
-  </>;
+        {subscriptionError && <Alert>{subscriptionError}</Alert>}
+    {subCancelError && <Alert>{subCancelError}</Alert>}
+    {subCancelNotice && <Alert success>{subCancelNotice}</Alert>}
+    {activeSubscriptions.length > 0 && <>
+      <h3>Активні та майбутні абонементи</h3>
+      <div className="table-scroll">
+        <table>
+          <thead><tr><th>Місце</th><th>Період</th><th>Статус</th><th>Дії</th></tr></thead>
+          <tbody>{activeSubscriptions.map(sub => <tr key={sub.id}>
+            <td>Місце №{sub.workspaceId}</td>
+            <td>{sub.startDate} — {sub.endDate}</td>
+            <td>{statusText(sub.status)}<small>{statusText(sub.paymentStatus)}</small></td>
+            <td>{canUserCancelSubscription(sub, now) && <button type="button" className="text-button danger" disabled={busy} onClick={() => {
+              setSubCancelError(''); setSubCancelNotice(''); setConfirmCancelSub(sub);
+            }}>Скасувати</button>}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </>}
+    {canConfirmCancelSub && <div className="confirm-panel"><p>Скасувати абонемент №{confirmCancelSub.id}?</p><div className="actions"><button className="btn small" disabled={busy} onClick={() => cancelSubscription(confirmCancelSub)}>Так, скасувати</button><button className="btn outline small" onClick={() => setConfirmCancelSub(null)}>Залишити</button></div></div>}
+    <p className="muted small-copy">Погодинну бронь можна скасувати щонайменше за 2 години, денну та абонемент — за добу.</p>
+    </>;
   return standalone ? content : <Modal title="Мій профіль" onClose={() => { if (!busy) onClose(); }} wide>{content}</Modal>;
 }

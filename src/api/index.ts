@@ -47,6 +47,7 @@ export const api = {
   },
   subscriptions: () => request<Subscription[]>('/subscriptions/my', {}, true),
   subscribe: (workspaceId: number, startDate: string) => request<Subscription>('/subscriptions', json('POST', { workspaceId, startDate }), true),
+  cancelSubscription: (id: number) => request<Subscription>(`/subscriptions/${id}/cancel`, json('PATCH'), true),
   stripeSession: (paymentId: number, successUrl: string, cancelUrl: string) => {
     const query = new URLSearchParams({ successUrl, cancelUrl });
     return request<StripeSession>(`/payments/${paymentId}/stripe-session?${query}`, json('POST'), true);
@@ -58,6 +59,7 @@ export const api = {
   bookings: (signal?: AbortSignal, userId?: number) =>
     request<Booking[]>(userId === undefined ? '/bookings' : `/bookings?userId=${userId}`, { signal }, true),
   adminSubscriptions: (signal?: AbortSignal) => request<Subscription[]>('/admin/subscriptions', { signal }, true),
+  adminCancelSubscription: (id: number) => request<Subscription>(`/admin/subscriptions/${id}`, json('DELETE'), true),
   adminUsers: (page = 0, search = '', order: 'recent' | 'name' | 'id' = 'recent', signal?: AbortSignal, size = 10) => {
     const sortBy = order === 'recent' ? 'createdAt' : order;
     const query = new URLSearchParams({ page: String(page), size: String(size), search, sortBy, direction: order === 'recent' ? 'desc' : 'asc' });
@@ -77,4 +79,6 @@ export const api = {
   adminPayments: (signal?: AbortSignal) => request<Payment[]>('/admin/payments', { signal }, true),
   updatePayment: (id: number, paymentMethod: InPersonPaymentMethod) =>
     request<Payment>(`/admin/payments/${id}/status`, json('PUT', { status: 'PAID', paymentMethod }), true),
+  confirmRefund: (id: number) =>
+    request<Payment>(`/admin/payments/${id}/refund`, json('PATCH'), true),
 };
