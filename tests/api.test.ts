@@ -139,6 +139,17 @@ describe('backend error and history responses', () => {
 });
 
 describe('registration and email verification', () => {
+  it('reports phone length separately from international format and accepts both length limits', async () => {
+    const { normalizePhone, phoneFormatError, phoneLengthError, phoneValidationError } = await import('../src/api/errors');
+    expect(phoneValidationError('+123456')).toBe(phoneLengthError);
+    expect(phoneValidationError('+1234567')).toBe('');
+    expect(phoneValidationError('+123456789012345')).toBe('');
+    expect(phoneValidationError('+1234567890123456')).toBe(phoneLengthError);
+    expect(phoneValidationError('+012345678')).toBe(phoneFormatError);
+    expect(phoneValidationError('123456789')).toBe(phoneFormatError);
+    expect(normalizePhone('+380 (67) 123-45-67')).toBe('+380671234567');
+  });
+
   it('sends password confirmation and signs in with the returned verification tokens', async () => {
     const { api } = await import('../src/api');
     const client = await import('../src/api/client');

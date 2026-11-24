@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { errorMessage, passwordsMismatch, phoneFormatError, requiredFieldMessage } from '../api/errors';
+import { errorMessage, normalizePhone, passwordsMismatch, phoneFormatError, phoneLengthError, phoneValidationError, requiredFieldMessage } from '../api/errors';
 import { Alert, Modal, ukrainianFormValidation } from './ui';
 
 export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin: () => Promise<void> }) {
@@ -11,9 +11,11 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin: 
   const [message,setMessage] = useState('');
   const [resendAt,setResendAt] = useState(0);
   const confirmationErrorId = useId();
+  const phoneErrorId = useId();
   const hasConfirmation = mode === 'register' || mode === 'reset';
   const confirmationField = mode === 'reset' ? 'confirmNewPassword' : 'confirmPassword';
   const confirmationError = hasConfirmation && (error === passwordsMismatch || error === requiredFieldMessage(confirmationField));
+  const phoneError = mode === 'register' && (error === phoneFormatError || error === phoneLengthError);
   const clearConfirmationError = () => {
     if (confirmationError) setError('');
   };
@@ -35,8 +37,9 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin: 
       }
       if(mode==='login') { await api.login(email.trim(), password); await onLogin();onClose(); }
       if(mode==='register') {
-        const phone = value('phone').replace(/[\s()-]/g,'');
-        if (!/^\+[1-9]\d{6,14}$/.test(phone)) { setError(phoneFormatError); return; }
+        const phone = normalizePhone(value('phone'));
+        const validationError = phoneValidationError(phone);
+        if (validationError) { setError(validationError); return; }
         const registration = await api.register({
           name: `${value('first')} ${value('last')}`.trim(), email: email.trim(), phone, password, confirmPassword: confirmation,
         });
@@ -78,9 +81,17 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin: 
   return <Modal title={mode==='verify' ? 'Підтвердження пошти' : mode==='forgot'||mode==='reset' ? 'Відновлення пароля' : 'Вітаємо у просторі «Твій хаб»!'} onClose={() => { if (!busy) onClose(); }}>
     <p className="muted">Увійдіть, щоб керувати бронюваннями.</p>
     {(mode==='login'||mode==='register') && <div className="tabs" role="tablist" aria-label="Вхід або реєстрація"><button role="tab" disabled={busy} aria-selected={mode==='login'} className={mode==='login'?'active':''} onClick={()=>change('login')}>Увійти</button><button role="tab" disabled={busy} aria-selected={mode==='register'} className={mode==='register'?'active':''} onClick={()=>change('register')}>Реєстрація</button></div>}
-    {error && !confirmationError && <Alert>{error}</Alert>}{message && <Alert success>{message}</Alert>}
+    {error && !confirmationError && !phoneError && <Alert>{error}</Alert>}{message && <Alert success>{message}</Alert>}
     <form {...ukrainianFormValidation} onSubmit={submit} className="form" key={mode}>
-      {mode==='register' && <><div className="form-row"><label>Ім’я<input name="first" required maxLength={50} autoComplete="given-name" placeholder="Марія..." /></label><label>Прізвище<input name="last" required maxLength={49} autoComplete="family-name" placeholder="Коваленко..." /></label></div><label>Номер телефону<input name="phone" required type="tel" autoComplete="tel" placeholder="+380..." /></label></>}
+      {mode==='register' && <>
+        <div className="form-row"><label>Ім’я<input name="first" required maxLength={50} autoComplete="given-name" placeholder="Марія..." /></label><label>Прізвище<input name="last" required maxLength={49} autoComplete="family-name" placeholder="Коваленко..." /></label></div>
+        <div>
+          <label>Номер телефону<input name="phone" required type="tel" autoComplete="tel" placeholder="+380..."
+            aria-invalid={phoneError || undefined} aria-describedby={phoneError ? phoneErrorId : undefined}
+            onChange={() => { if (phoneError) setError(''); }} /></label>
+          {phoneError && <p id={phoneErrorId} className="danger" role="alert">{error}</p>}
+        </div>
+      </>}
       <label>Пошта<input name="email" type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Адреса електронної пошти" /></label>
       {(mode==='verify'||mode==='reset') && <label>Код із листа<input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="000000" /></label>}
       {(mode==='login'||mode==='register'||mode==='reset') && <label>{mode==='reset'?'Новий пароль':'Пароль'}<input name="password" type="password" required minLength={mode==='login'?1:8} maxLength={mode==='login'?undefined:72} onChange={clearConfirmationError} autoComplete={mode==='login'?'current-password':'new-password'} placeholder="••••••••" /></label>}

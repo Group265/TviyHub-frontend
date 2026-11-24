@@ -80,7 +80,17 @@ const fieldLabels = new Map(Object.entries({
 }));
 
 export const phoneFormatError = 'Введіть номер телефону в міжнародному форматі, наприклад +380671234567.';
+export const phoneLengthError = 'Номер телефону повинен містити від 7 до 15 цифр після знака +.';
 export const passwordsMismatch = 'Паролі не збігаються.';
+
+export const normalizePhone = (value: string) => value.replace(/[\s()-]/g, '');
+
+export function phoneValidationError(phone: string): string {
+  const digits = /^\+(\d+)$/.exec(phone)?.[1];
+  if (!digits) return phoneFormatError;
+  if (digits.length < 7 || digits.length > 15) return phoneLengthError;
+  return digits.startsWith('0') ? phoneFormatError : '';
+}
 
 const defaultRequiredMessage = 'Заповніть це поле.';
 const requiredValidationDetails = new Set([
