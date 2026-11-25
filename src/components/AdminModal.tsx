@@ -8,10 +8,7 @@ import { useVenueClock } from '../useVenueClock';
 
 const pageSize = 10;
 type Tab = 'bookings' | 'subscriptions' | 'users';
-type SortableStatus = 'status' | 'payment';
-type SortDirection = 'ascending' | 'descending';
-type BookingSort = 'recent' | 'oldest' | 'client' | SortableStatus;
-type TableSort = { column: BookingSort; direction: SortDirection };
+type TableSort = 'recent' | 'oldest' | 'client' | 'status' | 'payment';
 type UserSort = 'recent' | 'name';
 type Action =
   | { type: 'user'; user: AdminUser; blocked: boolean }
@@ -27,16 +24,6 @@ const bookingDate = (booking: Booking) => [booking.bookingDate, booking.startTim
 const clientName = (userId: number, client?: AdminUser) => client?.name || ('Клієнт №' + userId);
 const matchesClient = (userId: number, client: AdminUser | undefined, term: string) =>
   !term || [clientName(userId, client), client?.email, client?.phone].some(value => value?.toLocaleLowerCase('uk').includes(term));
-
-function SortHeader({ label, direction, onSort, disabled }: {
-  label: string; direction?: SortDirection; onSort: () => void; disabled: boolean;
-}) {
-  return <th scope="col" className="admin-sort-cell" aria-sort={direction}>
-    <button type="button" className="admin-sort-button" onClick={onSort} disabled={disabled}>
-      {label}<span aria-hidden="true">{direction === 'ascending' ? '↑' : direction === 'descending' ? '↓' : '↕'}</span>
-    </button>
-  </th>;
-}
 
 function confirmationText(action: Action): string {
   if (action.type === 'cancelSubscription') return 'Скасувати абонемент №' + action.subscription.id + '?';
@@ -67,8 +54,8 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [userSort, setUserSort] = useState<UserSort>('recent');
-  const [bookingSort, setBookingSort] = useState<TableSort>({ column: 'recent', direction: 'ascending' });
-  const [subscriptionSort, setSubscriptionSort] = useState<TableSort>({ column: 'recent', direction: 'ascending' });
+  const [bookingSort, setBookingSort] = useState<TableSort>('recent');
+  const [subscriptionSort, setSubscriptionSort] = useState<TableSort>('recent');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -136,17 +123,16 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
     const term = search.trim().toLocaleLowerCase('uk');
     return bookings.filter(booking => matchesClient(booking.userId, clients[booking.userId], term)).sort((left, right) => {
       const newest = bookingDate(right).localeCompare(bookingDate(left)) || right.id - left.id;
-      const { column, direction } = bookingSort;
-      if (column === 'oldest') return -newest;
-      if (column === 'client') return collator.compare(
+      if (bookingSort === 'oldest') return -newest;
+      if (bookingSort === 'client') return collator.compare(
         clientName(left.userId, clients[left.userId]), clientName(right.userId, clients[right.userId]),
       ) || newest;
-      const order = column === 'status' ? collator.compare(
+      const order = bookingSort === 'status' ? collator.compare(
         statusText(bookingDisplayStatus(left, now)), statusText(bookingDisplayStatus(right, now)),
-      ) : column === 'payment' ? comparePayment(
+      ) : bookingSort === 'payment' ? comparePayment(
         bookingPayments.get(left.id)?.status ?? left.paymentStatus, bookingPayments.get(right.id)?.status ?? right.paymentStatus,
       ) : 0;
-      return order * (direction === 'ascending' ? 1 : -1) || newest;
+      return order || newest;
     });
   }, [bookings, bookingPayments, bookingSort, clients, search, now]);
 
@@ -154,32 +140,28 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
     const term = search.trim().toLocaleLowerCase('uk');
     return subscriptions.filter(item => matchesClient(item.userId, clients[item.userId], term))
       .sort((left, right) => {
-        const { column, direction } = subscriptionSort;
-        const order = column === 'status' ? collator.compare(statusText(left.status), statusText(right.status)) :
-          column === 'payment' ? comparePayment(left.paymentStatus, right.paymentStatus) : 0;
-        return order * (direction === 'ascending' ? 1 : -1) ||
-          right.startDate.localeCompare(left.startDate) || right.id - left.id;
+        const newest = right.startDate.localeCompare(left.startDate) || right.id - left.id;
+        if (subscriptionSort === 'oldest') return -newest;
+        if (subscriptionSort === 'client') return collator.compare(
+          clientName(left.userId, clients[left.userId]), clientName(right.userId, clients[right.userId]),
+        ) || newest;
+        const order = subscriptionSort === 'status' ? collator.compare(statusText(left.status), statusText(right.status)) :
+          subscriptionSort === 'payment' ? comparePayment(
+            subscriptionPayments.get(left.id)?.status ?? left.paymentStatus,
+            subscriptionPayments.get(right.id)?.status ?? right.paymentStatus,
+          ) : 0;
+        return order || newest;
       });
-  }, [subscriptions, clients, search, subscriptionSort]);
+  }, [subscriptions, subscriptionPayments, clients, search, subscriptionSort]);
 
   const entryCount = tab === 'subscriptions' ? sortedSubscriptions.length : sortedBookings.length;
   const totalPages = tab === 'users' ? users?.totalPages ?? 0 : Math.ceil(entryCount / pageSize);
   const visiblePage = tab === 'users' ? page : Math.min(page, Math.max(0, totalPages - 1));
   const visibleBookings = sortedBookings.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
   const visibleSubscriptions = sortedSubscriptions.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
-  const activeSort = tab === 'subscriptions' ? subscriptionSort : bookingSort;
-  const sortHeaders = (['status', 'payment'] as const).map(column =>
-    <SortHeader key={column} label={column === 'status' ? 'Статус' : 'Оплата'}
-      direction={activeSort.column === column ? activeSort.direction : undefined}
-      onSort={() => toggleSort(column)} disabled={busy} />,
-  );
-
-  function toggleSort(column: SortableStatus) {
-    const setSort = tab === 'subscriptions' ? setSubscriptionSort : setBookingSort;
-    setSort(current => ({
-      column,
-      direction: current.column === column && current.direction === 'ascending' ? 'descending' : 'ascending',
-    }));
+  function changeTableSort(sort: TableSort) {
+    if (tab === 'subscriptions') setSubscriptionSort(sort);
+    else setBookingSort(sort);
     setPage(0);
     setConfirm(null);
   }
@@ -264,18 +246,19 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
       <label className="search">Пошук {tab === 'users' ? 'користувача' : 'клієнта'}
         <input type="search" value={search} disabled={busy} onChange={e => { setSearch(e.target.value); setPage(0); setConfirm(null); }} placeholder="Ім’я, пошта або телефон" />
       </label>
-      {tab !== 'subscriptions' && <label className="search">Сортування
+      <label className="search">Сортування
         {tab === 'users' ? <select value={userSort} disabled={busy} onChange={e => { setUserSort(e.target.value as UserSort); setPage(0); setConfirm(null); }}>
           <option value="recent">Спочатку нові користувачі</option>
           <option value="name">За ім’ям</option>
-        </select> : <select value={bookingSort.column} disabled={busy} onChange={e => { setBookingSort({ column: e.target.value as BookingSort, direction: 'ascending' }); setPage(0); setConfirm(null); }}>
-          <option value="recent">За датою від новішої</option>
-          <option value="oldest">За датою від давнішої</option>
+        </select> : <select value={tab === 'subscriptions' ? subscriptionSort : bookingSort} disabled={busy}
+          onChange={e => changeTableSort(e.target.value as TableSort)}>
+          <option value="recent">{tab === 'subscriptions' ? 'За датою початку від новішої' : 'За датою від новішої'}</option>
+          <option value="oldest">{tab === 'subscriptions' ? 'За датою початку від давнішої' : 'За датою від давнішої'}</option>
           <option value="client">За ім’ям клієнта</option>
-          <option value="status">За статусом бронювання</option>
+          <option value="status">{tab === 'subscriptions' ? 'За статусом абонемента' : 'За статусом бронювання'}</option>
           <option value="payment">За статусом оплати</option>
         </select>}
-      </label>}
+      </label>
     </div>
     {error && <Alert>{error}</Alert>}
     {notice && <Alert success>{notice}</Alert>}
@@ -299,7 +282,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
       </table></div> : <p className="empty">Користувачів не знайдено.</p> :
       tab === 'subscriptions' ?
       visibleSubscriptions.length ? <div className="table-scroll"><table>
-        <thead><tr><th scope="col">№ абонемента</th><th>Клієнт</th><th>Місце</th><th>Період</th>{sortHeaders}<th>Дії</th></tr></thead>
+        <thead><tr><th scope="col">№ абонемента</th><th>Клієнт</th><th>Місце</th><th>Період</th><th scope="col">Статус</th><th scope="col">Оплата</th><th>Дії</th></tr></thead>
         <tbody>{visibleSubscriptions.map(item => {
           const client = clients[item.userId];
           const workspace = workspaces.find(workspace => workspace.id === item.workspaceId);
@@ -310,8 +293,8 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
             <td>{clientName(item.userId, client)}<small>{client?.phone}</small></td>
             <td>{displayWorkspace(workspace ?? { id: item.workspaceId, name: '' })}</td>
             <td>{item.startDate} — {item.endDate}</td>
-            <td className="admin-sort-cell">{statusText(item.status)}</td>
-            <td className="admin-sort-cell">{statusText(payment?.status ?? item.paymentStatus)}
+            <td>{statusText(item.status)}</td>
+            <td>{statusText(payment?.status ?? item.paymentStatus)}
               {canRefund && <div className="actions admin-payment-actions">
                 <button className="text-button" disabled={busy} onClick={() => ask({ type: 'refund', label: 'абонемент №' + item.id, payment })}>Підтвердити повернення</button>
               </div>}
@@ -321,7 +304,7 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
         })}</tbody>
       </table></div> : <p className="empty">Абонементів не знайдено.</p> :
       visibleBookings.length ? <div className="table-scroll"><table>
-        <thead><tr><th scope="col">№ бронювання</th><th>Дата / час</th><th>Клієнт</th><th>Ресурс / тариф</th><th>Сума</th>{sortHeaders}<th>Дії</th></tr></thead>
+        <thead><tr><th scope="col">№ бронювання</th><th>Дата / час</th><th>Клієнт</th><th>Ресурс / тариф</th><th>Сума</th><th scope="col">Статус</th><th scope="col">Оплата</th><th>Дії</th></tr></thead>
         <tbody>{visibleBookings.map(booking => {
           const payment = bookingPayments.get(booking.id);
           const workspace = workspaces.find(item => item.id === booking.workspaceId);
@@ -335,8 +318,8 @@ export function AdminModal({ onClose, onChanged, userId, workspaces }: {
             <td>{clientName(booking.userId, clients[booking.userId])}<small>{clients[booking.userId]?.phone}</small></td>
             <td>{displayWorkspace(workspace ?? { id: booking.workspaceId, name: booking.workspaceName ?? '' })}<small>{bookingTypeText(booking.bookingType)}</small></td>
             <td>{money(booking.totalPrice)}</td>
-            <td className="admin-sort-cell"><span className={'status ' + statusClass}>{statusText(status)}</span></td>
-            <td className="admin-sort-cell">{statusText(payment?.status ?? booking.paymentStatus)}
+            <td><span className={'status ' + statusClass}>{statusText(status)}</span></td>
+            <td>{statusText(payment?.status ?? booking.paymentStatus)}
               {canRecordPayment && <div className="actions admin-payment-actions">
                 <button className="text-button" disabled={busy} onClick={() => ask({ type: 'payment', booking, payment, method: 'CASH' })}>Готівка</button>
                 <button className="text-button" disabled={busy} onClick={() => ask({ type: 'payment', booking, payment, method: 'CARD' })}>Термінал</button>
