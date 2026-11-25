@@ -48,40 +48,36 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const passwordErrorId = useId();
   const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
   const now = venueDateTime(useVenueClock());
-    <div className="table-heading">
-      <h3>Історія бронювань</h3>
-      <select
-        aria-label="Фільтр історії"
-        value={scope}
-        onChange={e => {
-          setLoading(true);
-          setHistoryError('');
-          setPaymentError('');
-          setConfirmCancel(null);
-          setScope(e.target.value);
-          setPage(0);
-        }}
-      >
-        <optgroup label="За часом">
-          <option value="all">Усі бронювання</option>
-          <option value="upcoming">Майбутні</option>
-          <option value="past">Минулі</option>
-        </optgroup>
-        <optgroup label="За статусом бронювання">
-          <option value="PENDING_PAYMENT">Очікують оплати</option>
-          <option value="CONFIRMED">Підтверджені</option>
-          <option value="COMPLETED">Завершені</option>
-          <option value="CANCELLED">Скасовані</option>
-        </optgroup>
-        <optgroup label="За оплатою">
-          <option value="PAID">Сплачені</option>
-          <option value="UNPAID">Не сплачені</option>
-          <option value="REFUND">Повернення коштів</option>
-        </optgroup>
-      </select>
-    </div>
+  const isClientFiltered = !['all', 'past'].includes(scope);
 
-  const serverPage = scope === 'upcoming' ? 0 : page;
+  const filteredItems = useMemo(() => {
+    if (scope === 'upcoming') return upcoming.filter(item => isUpcomingBooking(item, now));
+    if (!isClientFiltered) return [];
+    return upcoming.filter(item => {
+      const displayStatus = bookingDisplayStatus(item, now);
+      const payStatus = item.paymentStatus || paymentBookings?.get(item.id)?.paymentStatus;
+      if (scope === 'PENDING_PAYMENT') return displayStatus === 'PENDING_PAYMENT';
+      if (scope === 'CONFIRMED') return displayStatus === 'CONFIRMED';
+      if (scope === 'COMPLETED') return displayStatus === 'COMPLETED';
+      if (scope === 'CANCELLED') return displayStatus === 'CANCELLED';
+      if (scope === 'PAID') return payStatus === 'PAID';
+      if (scope === 'UNPAID') return payStatus === 'UNPAID';
+      if (scope === 'REFUND') return payStatus === 'REFUND_PENDING' || payStatus === 'REFUNDED';
+      return true;
+    });
+  }, [upcoming, scope, isClientFiltered, now, paymentBookings]);
+
+  const totalPages = isClientFiltered
+    ? Math.ceil(filteredItems.length / HISTORY_PAGE_SIZE)
+    : (history?.totalPages ?? 0);
+  const visiblePage = isClientFiltered ? Math.min(page, Math.max(0, totalPages - 1)) : page;
+  const visibleHistory = isClientFiltered
+    ? filteredItems.slice(visiblePage * HISTORY_PAGE_SIZE, (visiblePage + 1) * HISTORY_PAGE_SIZE)
+    : history?.content ?? [];
+  const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
+  const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
+  const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
+  const serverPage = isClientFiltered ? 0 : page;
   const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
     (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
       (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
