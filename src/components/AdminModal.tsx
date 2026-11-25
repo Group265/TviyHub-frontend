@@ -711,7 +711,7 @@ className="admin-modal"
         </div>
       )}
 
-      {error && <Alert>{error}</Alert>}
+      {error && !extendSub && !workspaceModal && !tariffModal && <Alert>{error}</Alert>}
       {notice && <Alert success>{notice}</Alert>}
 
       {canConfirm && (
@@ -1335,6 +1335,7 @@ className="admin-modal"
             Клієнт: <strong>{clientName(extendSub.userId, clients[extendSub.userId])}</strong>. Поточна дата завершення:{' '}
             <strong>{extendSub.endDate}</strong>
           </p>
+          {error && <Alert>{error}</Alert>}
           <form className="form" onSubmit={handleExtendSubmit}>
             <label>
               Нова дата завершення дії
@@ -1374,6 +1375,7 @@ className="admin-modal"
           title={workspaceModal.mode === 'edit' ? 'Редагувати робоче місце' : 'Додати робоче місце'}
           onClose={() => !busy && setWorkspaceModal(null)}
         >
+        {error && <Alert>{error}</Alert>}
           <form className="form" onSubmit={handleWorkspaceSubmit}>
             <label>
               Назва місця
@@ -1416,6 +1418,7 @@ className="admin-modal"
           title={tariffModal.mode === 'edit' ? 'Редагувати тариф' : 'Створити тариф'}
           onClose={() => !busy && setTariffModal(null)}
         >
+        {error && <Alert>{error}</Alert>}
           <form className="form" onSubmit={handleTariffSubmit}>
             <label>
               Категорія (бейдж)
