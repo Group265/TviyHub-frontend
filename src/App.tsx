@@ -122,7 +122,7 @@ export default function App() {
     if(bookableWorkspaces.some(w=>w.type===workspaceType))choose(workspace,type);
     else document.getElementById('booking')?.scrollIntoView({behavior:'smooth'});
   }
-  const price=(workspaceType:'DESK'|'MEETING_ROOM',type:BookingType,fallback:number) => type==='SUBSCRIPTION'?3500:tariffs.find(t=>t.workspaceType===workspaceType&&t.bookingType===type)?.price??fallback;
+  const price=(workspaceType:'DESK'|'MEETING_ROOM',type:BookingType,fallback:number) => tariffs.find(t=>t.workspaceType===workspaceType&&t.bookingType===type)?.price??fallback;
   const room=bookableWorkspaces.find(w=>w.type==='MEETING_ROOM');
   const desks=bookableWorkspaces.filter(w=>w.type==='DESK');
   const navLinks=nav.map(([id,label])=><a key={id} href={`#${id}`} onClick={()=>setMobileNav(false)}>{label}</a>);
