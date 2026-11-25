@@ -36,10 +36,6 @@ const messages = new Map(Object.entries({
   'Subscriptions can only be created for DESK resources. MEETING_ROOM is hourly only.': 'Абонемент можна оформити лише на робоче місце. Переговорна кімната доступна погодинно.',
   'The desk is already held or active for the selected dates': 'На вибраний період це місце вже закріплене за іншим абонементом.',
   'Cannot create subscription: this desk already has standard hourly/daily bookings within this period.': 'На вибраний період уже є погодинні або денні бронювання цього місця.',
-  'Only ACTIVE subscriptions can be extended': 'Продовжити можна лише активний абонемент.',
-  'Extension days must be greater than zero': 'Кількість днів продовження має бути більшою за нуль.',
-  'Cannot extend subscription: the extension period conflicts with another client\'s upcoming subscription': 'Неможливо продовжити абонемент: період продовження перетинається з іншим абонементом на це місце.',
-  'Cannot extend subscription: this desk already has standard hourly/daily bookings within the extension period.': 'Неможливо продовжити абонемент: на період продовження вже є погодинні або денні бронювання цього місця.',
   'You cannot block yourself': 'Ви не можете заблокувати власний обліковий запис.',
   'Malformed JSON request': 'Запит має некоректний формат. Повторіть дію.',
 }));
