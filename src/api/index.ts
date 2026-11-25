@@ -81,7 +81,7 @@ export const api = {
     request<Payment>(`/admin/payments/${id}/status`, json('PUT', { status: 'PAID', paymentMethod }), true),
   confirmRefund: (id: number) =>
     request<Payment>(`/admin/payments/${id}/refund`, json('PATCH'), true),
-    closedDays: (signal?: AbortSignal) => request<ClosedDay[]>('/closed-days', { signal }, true),
+    closedDays: (signal?: AbortSignal) => request<ClosedDay[]>('/closed-days', { signal }),
     createClosedDay: (data: { date: string; reason: string }) =>
       request<ClosedDay>('/admin/closed-days', json('POST', data), true),
     deleteClosedDay: (date: string) =>
