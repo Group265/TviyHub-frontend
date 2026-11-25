@@ -30,14 +30,60 @@ export const ukrainianFormValidation = {
   },
 };
 
-export function Modal({ title, children, onClose, wide = false, className }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean; className?: string }) {
+export function Modal({
+  title,
+  subtitle,
+  children,
+  onClose,
+  wide = false,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  onClose: () => void;
+  wide?: boolean;
+  className?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
-  useEffect(() => { const dialog = ref.current!; dialog.showModal(); const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { dialog.close(); document.body.style.overflow = previous; }; }, []);
-  return <dialog ref={ref} className={['modal', wide && 'modal-wide', className].filter(Boolean).join(' ')} aria-labelledby={id} onCancel={e => {e.preventDefault();onClose();}} onClick={e => {if(e.target===e.currentTarget)onClose();}}>
-    <div className="modal-inner"><button type="button" className="close" aria-label="Закрити" onClick={onClose}><Icon name="imgIconClose"/></button><h2 id={id}>{title}</h2>{children}</div>
-  </dialog>;
+  useEffect(() => {
+    const dialog = ref.current!;
+    dialog.showModal();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previous;
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className={['modal', wide && 'modal-wide', className].filter(Boolean).join(' ')}
+      aria-labelledby={id}
+      onCancel={e => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-inner">
+        <button type="button" className="close" aria-label="Закрити" onClick={onClose}>
+          <Icon name="imgIconClose" />
+        </button>
+        <div className="modal-header">
+          <h2 id={id}>{title}</h2>
+          {subtitle && <p className="modal-subtitle">{subtitle}</p>}
+        </div>
+        {children}
+      </div>
+    </dialog>
+  );
 }
+
 export function Alert({ children, success = false }: { children: ReactNode; success?: boolean }) { return <div className={`alert ${success ? 'alert-success' : ''}`} role={success ? 'status' : 'alert'}>{children}</div>; }
 export function SectionTitle({ title, description }: { title: string; description?: string }) { return <div className="section-title"><h2>{title}</h2>{description && <p>{description}</p>}</div>; }
 export function Pager({ page, total, change }: { page: number; total: number; change: (n: number) => void }) { return total > 1 ? <div className="pager"><button className="btn outline small" disabled={!page} onClick={() => change(page-1)}>Назад</button><span>{page+1} / {total}</span><button className="btn outline small" disabled={page+1>=total} onClick={() => change(page+1)}>Далі</button></div> : null; }
