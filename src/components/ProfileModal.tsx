@@ -48,15 +48,39 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const passwordErrorId = useId();
   const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
   const now = venueDateTime(useVenueClock());
-  const upcomingItems = useMemo(() => upcoming.filter(item => isUpcomingBooking(item, now)), [upcoming, now]);
-  const totalPages = scope === 'upcoming' ? Math.ceil(upcomingItems.length / HISTORY_PAGE_SIZE) : (history?.totalPages ?? 0);
-  const visiblePage = scope === 'upcoming' ? Math.min(page, Math.max(0, totalPages - 1)) : page;
-  const visibleHistory = scope === 'upcoming'
-    ? upcomingItems.slice(visiblePage * HISTORY_PAGE_SIZE, (visiblePage + 1) * HISTORY_PAGE_SIZE)
-    : history?.content ?? [];
-  const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
-  const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
-  const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
+    <div className="table-heading">
+      <h3>Історія бронювань</h3>
+      <select
+        aria-label="Фільтр історії"
+        value={scope}
+        onChange={e => {
+          setLoading(true);
+          setHistoryError('');
+          setPaymentError('');
+          setConfirmCancel(null);
+          setScope(e.target.value);
+          setPage(0);
+        }}
+      >
+        <optgroup label="За часом">
+          <option value="all">Усі бронювання</option>
+          <option value="upcoming">Майбутні</option>
+          <option value="past">Минулі</option>
+        </optgroup>
+        <optgroup label="За статусом бронювання">
+          <option value="PENDING_PAYMENT">Очікують оплати</option>
+          <option value="CONFIRMED">Підтверджені</option>
+          <option value="COMPLETED">Завершені</option>
+          <option value="CANCELLED">Скасовані</option>
+        </optgroup>
+        <optgroup label="За оплатою">
+          <option value="PAID">Сплачені</option>
+          <option value="UNPAID">Не сплачені</option>
+          <option value="REFUND">Повернення коштів</option>
+        </optgroup>
+      </select>
+    </div>
+
   const serverPage = scope === 'upcoming' ? 0 : page;
   const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
     (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
@@ -82,6 +106,14 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       if (scope === 'upcoming') {
         const items = await api.upcomingHistory(signal);
         if (!signal.aborted) setUpcoming(items);
+      } else if (isClientFiltered) {
+        const first = await api.history(0, 'all', signal);
+        const allItems = [...first.content];
+        for (let p = 1; p < first.totalPages; p++) {
+          const next = await api.history(p, 'all', signal);
+          allItems.push(...next.content);
+        }
+        if (!signal.aborted) setUpcoming(allItems);
       } else {
         const result = await api.history(serverPage, scope, signal);
         if (!signal.aborted) setHistory(result);
@@ -93,10 +125,11 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       if (!signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [serverPage, scope, revision]);
+  }, [serverPage, scope, isClientFiltered, revision]);
+
 
   useEffect(() => {
-    if (!needsPaymentData) return;
+      if (!needsPaymentData && !['PAID', 'UNPAID', 'REFUND'].includes(scope)) return;
     const controller = new AbortController();
     setPaymentBookings(null);
     api.bookings(controller.signal, user.role === 'ADMIN' ? user.id : undefined).then(bookings => {
@@ -255,9 +288,38 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       </>}
       <div className="actions"><button className="btn small" disabled={busy}>{busy?'Зачекайте…':codeStep?'Підтвердити':'Надіслати код'}</button><button type="button" className="text-button" disabled={busy} onClick={()=>openEditor(null)}>Скасувати</button></div>
     </form>}
-    <div className="table-heading"><h3>Історія бронювань</h3><select aria-label="Фільтр історії" value={scope} onChange={e=>{
-      setLoading(true);setHistoryError('');setPaymentError('');setConfirmCancel(null);setScope(e.target.value);setPage(0);
-    }}><option value="all">Усі</option><option value="upcoming">Майбутні</option><option value="past">Минулі</option></select></div>
+        <div className="table-heading">
+          <h3>Історія бронювань</h3>
+          <select
+            aria-label="Фільтр історії"
+            value={scope}
+            onChange={e => {
+              setLoading(true);
+              setHistoryError('');
+              setPaymentError('');
+              setConfirmCancel(null);
+              setScope(e.target.value);
+              setPage(0);
+            }}
+          >
+            <optgroup label="За часом">
+              <option value="all">Усі бронювання</option>
+              <option value="upcoming">Майбутні</option>
+              <option value="past">Минулі</option>
+            </optgroup>
+            <optgroup label="За статусом бронювання">
+              <option value="PENDING_PAYMENT">Очікують оплати</option>
+              <option value="CONFIRMED">Підтверджені</option>
+              <option value="COMPLETED">Завершені</option>
+              <option value="CANCELLED">Скасовані</option>
+            </optgroup>
+            <optgroup label="За оплатою">
+              <option value="PAID">Сплачені</option>
+              <option value="UNPAID">Не сплачені</option>
+              <option value="REFUND">Повернення коштів</option>
+            </optgroup>
+          </select>
+        </div>
     {cancelError && <Alert>{cancelError}</Alert>}
     {cancelNotice && <Alert success>{cancelNotice}</Alert>}
     {paymentError && <Alert>{paymentError}</Alert>}
