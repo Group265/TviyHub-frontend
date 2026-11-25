@@ -218,4 +218,71 @@
 .table-heading select {
   max-width: 240px;
 }
+/* Profile History Segmented Tabs */
+.profile-history-header {
+  margin: 28px 0 20px;
+}
+.profile-history-header h3 {
+  margin: 0 0 16px;
+}
+
+.profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.profile-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #212529;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-tab + .profile-tab {
+  border-left: 1px solid var(--border);
+}
+
+.profile-tab:hover:not(.active) {
+  background: #faf8f5;
+}
+
+.profile-tab.active {
+  background: var(--orange);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.profile-tab.active + .profile-tab {
+  border-left-color: transparent;
+}
+
+@media (max-width: 760px) {
+  .profile-tabs {
+    grid-template-columns: repeat(2, 1fr);
+    border-radius: 20px;
+  }
+  .profile-tab + .profile-tab {
+    border-left: none;
+  }
+  .profile-tab:nth-child(even) {
+    border-left: 1px solid var(--border);
+  }
+  .profile-tab:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
 

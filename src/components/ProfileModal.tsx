@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'rea
 import { api, HISTORY_PAGE_SIZE } from '../api';
 import { clearSession, logout } from '../api/client';
 import { bookingAlreadyStartedError, errorMessage, passwordsMismatch } from '../api/errors';
-import type { Booking, HistoryItem, Page, Subscription, User, Workspace } from '../api/types';
+import type { Booking, HistoryItem, Subscription, User, Workspace } from '../api/types';
 import {
   bookingCloseTime, bookingDisplayStatus, bookingOpenTime, bookingPaymentWindow, canCancelBooking, canUserCancelSubscription, displayWorkspace,
   isCurrentSubscription, isRetiredWorkspace, isUpcomingBooking, money, paymentDeadlineText, statusText, venueDateTime,
@@ -20,121 +20,126 @@ function reusesCurrentPassword(form: FormData): boolean {
 }
 
 export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, standalone = false }: { user: User; onClose: () => void; onUser: (u: User | null) => void; onRepeat: (w: Workspace, item: HistoryItem) => void; onLogoutError: (message: string) => void; standalone?: boolean }) {
-  const [history,setHistory]=useState<Page<HistoryItem>|null>(null);
-  const [upcoming,setUpcoming]=useState<HistoryItem[]>([]);
-  const [historyError,setHistoryError]=useState('');
-  const [subscriptionError,setSubscriptionError]=useState('');
-  const [subscriptions,setSubscriptions]=useState<Subscription[]>([]);
-  const [page,setPage]=useState(0);
-  const [scope,setScope]=useState('all');
-  const [revision,setRevision]=useState(0);
-  const [error,setError]=useState('');
-  const [loading,setLoading]=useState(true);
-  const [edit,setEdit]=useState<'details'|'password'|null>(null);
-  const [codeStep,setCodeStep]=useState(false);
-  const [busy,setBusy]=useState(false);
-  const [notice,setNotice]=useState('');
-  const [cancelError,setCancelError]=useState('');
-  const [cancelNotice,setCancelNotice]=useState('');
-  const [confirmCancel,setConfirmCancel]=useState<HistoryItem|null>(null);
-  const [confirmCancelSub, setConfirmCancelSub] = useState<Subscription | null>(null);
-  const [subCancelError, setSubCancelError] = useState('');
-  const [subCancelNotice, setSubCancelNotice] = useState('');
-  const [paymentError,setPaymentError] = useState('');
-  const [paymentBookings,setPaymentBookings] = useState<Map<number, Booking> | null>(null);
-  const leavingForCheckout = useRef(false);
-  const detailsPanelId = useId();
-  const passwordPanelId = useId();
-  const passwordErrorId = useId();
-  const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
-  const now = venueDateTime(useVenueClock());
-  const isClientFiltered = !['all', 'past'].includes(scope);
+    const [allHistory, setAllHistory] = useState<HistoryItem[]>([]);
+    const [historyError, setHistoryError] = useState('');
+    const [subscriptionError, setSubscriptionError] = useState('');
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+    const [page, setPage] = useState(0);
+    const [scope, setScope] = useState<'all' | 'upcoming' | 'past' | 'cancelled'>('all');
+    const [revision, setRevision] = useState(0);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [edit, setEdit] = useState<'details' | 'password' | null>(null);
+    const [codeStep, setCodeStep] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [notice, setNotice] = useState('');
+    const [cancelError, setCancelError] = useState('');
+    const [cancelNotice, setCancelNotice] = useState('');
+    const [confirmCancel, setConfirmCancel] = useState<HistoryItem | null>(null);
+    const [confirmCancelSub, setConfirmCancelSub] = useState<Subscription | null>(null);
+    const [subCancelError, setSubCancelError] = useState('');
+    const [subCancelNotice, setSubCancelNotice] = useState('');
+    const [paymentError, setPaymentError] = useState('');
+    const [paymentBookings, setPaymentBookings] = useState<Map<number, Booking> | null>(null);
+    const leavingForCheckout = useRef(false);
+    const detailsPanelId = useId();
+    const passwordPanelId = useId();
+    const passwordErrorId = useId();
+    const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
+    const now = venueDateTime(useVenueClock());
 
-  const filteredItems = useMemo(() => {
-    if (scope === 'upcoming') return upcoming.filter(item => isUpcomingBooking(item, now));
-    if (!isClientFiltered) return [];
-    return upcoming.filter(item => {
-      const displayStatus = bookingDisplayStatus(item, now);
-      const payStatus = item.paymentStatus || paymentBookings?.get(item.id)?.paymentStatus;
-      if (scope === 'PENDING_PAYMENT') return displayStatus === 'PENDING_PAYMENT';
-      if (scope === 'CONFIRMED') return displayStatus === 'CONFIRMED';
-      if (scope === 'COMPLETED') return displayStatus === 'COMPLETED';
-      if (scope === 'CANCELLED') return displayStatus === 'CANCELLED';
-      if (scope === 'PAID') return payStatus === 'PAID';
-      if (scope === 'UNPAID') return payStatus === 'UNPAID';
-      if (scope === 'REFUND') return payStatus === 'REFUND_PENDING' || payStatus === 'REFUNDED';
-      return true;
-    });
-  }, [upcoming, scope, isClientFiltered, now, paymentBookings]);
+    const { counts, filteredItems } = useMemo(() => {
+      const upcomingList: HistoryItem[] = [];
+      const pastList: HistoryItem[] = [];
+      const cancelledList: HistoryItem[] = [];
 
-  const totalPages = isClientFiltered
-    ? Math.ceil(filteredItems.length / HISTORY_PAGE_SIZE)
-    : (history?.totalPages ?? 0);
-  const visiblePage = isClientFiltered ? Math.min(page, Math.max(0, totalPages - 1)) : page;
-  const visibleHistory = isClientFiltered
-    ? filteredItems.slice(visiblePage * HISTORY_PAGE_SIZE, (visiblePage + 1) * HISTORY_PAGE_SIZE)
-    : history?.content ?? [];
-  const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
-  const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
-  const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
-  const serverPage = isClientFiltered ? 0 : page;
-  const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
-    (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
-      (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
+      for (const item of allHistory) {
+        const displayStatus = bookingDisplayStatus(item, now);
+        if (displayStatus === 'CANCELLED') {
+          cancelledList.push(item);
+        } else if (isUpcomingBooking(item, now) || displayStatus === 'PENDING_PAYMENT') {
+          upcomingList.push(item);
+        } else {
+          pastList.push(item);
+        }
+      }
 
-  useEffect(() => {
-    function restoreProfile(event: PageTransitionEvent) {
-      if (!event.persisted || !leavingForCheckout.current) return;
-      leavingForCheckout.current = false;
-      setBusy(false);
-      setRevision(value => value + 1);
-    }
-    window.addEventListener('pageshow', restoreProfile);
-    return () => window.removeEventListener('pageshow', restoreProfile);
-  }, []);
+      const currentList =
+        scope === 'upcoming'
+          ? upcomingList
+          : scope === 'past'
+            ? pastList
+            : scope === 'cancelled'
+              ? cancelledList
+              : allHistory;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    setLoading(true);
-    setHistoryError('');
-    const load = async () => {
-      if (scope === 'upcoming') {
-        const items = await api.upcomingHistory(signal);
-        if (!signal.aborted) setUpcoming(items);
-      } else if (isClientFiltered) {
+      return {
+        counts: {
+          all: allHistory.length,
+          upcoming: upcomingList.length,
+          past: pastList.length,
+          cancelled: cancelledList.length,
+        },
+        filteredItems: currentList,
+      };
+    }, [allHistory, scope, now]);
+
+    const totalPages = Math.ceil(filteredItems.length / HISTORY_PAGE_SIZE);
+    const visiblePage = Math.min(page, Math.max(0, totalPages - 1));
+    const visibleHistory = filteredItems.slice(
+      visiblePage * HISTORY_PAGE_SIZE,
+      (visiblePage + 1) * HISTORY_PAGE_SIZE,
+    );
+    const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
+    const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
+    const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
+    const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
+      (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
+        (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
+
+    useEffect(() => {
+      function restoreProfile(event: PageTransitionEvent) {
+        if (!event.persisted || !leavingForCheckout.current) return;
+        leavingForCheckout.current = false;
+        setBusy(false);
+        setRevision(value => value + 1);
+      }
+      window.addEventListener('pageshow', restoreProfile);
+      return () => window.removeEventListener('pageshow', restoreProfile);
+    }, []);
+
+    useEffect(() => {
+      const controller = new AbortController();
+      const { signal } = controller;
+      setLoading(true);
+      setHistoryError('');
+      const load = async () => {
         const first = await api.history(0, 'all', signal);
-        const allItems = [...first.content];
+        const items = [...first.content];
         for (let p = 1; p < first.totalPages; p++) {
           const next = await api.history(p, 'all', signal);
-          allItems.push(...next.content);
+          items.push(...next.content);
         }
-        if (!signal.aborted) setUpcoming(allItems);
-      } else {
-        const result = await api.history(serverPage, scope, signal);
-        if (!signal.aborted) setHistory(result);
-      }
-    };
-    load().catch(err => {
-      if (!signal.aborted) setHistoryError(`Не вдалося завантажити історію бронювань. ${errorMessage(err, '')}`.trim());
-    }).finally(() => {
-      if (!signal.aborted) setLoading(false);
-    });
-    return () => controller.abort();
-  }, [serverPage, scope, isClientFiltered, revision]);
+        if (!signal.aborted) setAllHistory(items);
+      };
+      load().catch(err => {
+        if (!signal.aborted) setHistoryError(`Не вдалося завантажити історію бронювань. ${errorMessage(err, '')}`.trim());
+      }).finally(() => {
+        if (!signal.aborted) setLoading(false);
+      });
+      return () => controller.abort();
+    }, [revision]);
 
-
-  useEffect(() => {
-      if (!needsPaymentData && !['PAID', 'UNPAID', 'REFUND'].includes(scope)) return;
-    const controller = new AbortController();
-    setPaymentBookings(null);
-    api.bookings(controller.signal, user.role === 'ADMIN' ? user.id : undefined).then(bookings => {
-      if (!controller.signal.aborted) setPaymentBookings(new Map(bookings.map(booking => [booking.id, booking])));
-    }).catch(() => {
-      if (!controller.signal.aborted) setPaymentBookings(new Map());
-    });
-    return () => controller.abort();
-  }, [needsPaymentData, revision, user.id, user.role]);
+    useEffect(() => {
+      if (!needsPaymentData) return;
+      const controller = new AbortController();
+      api.bookings(controller.signal, user.role === 'ADMIN' ? user.id : undefined).then(bookings => {
+        if (!controller.signal.aborted) setPaymentBookings(new Map(bookings.map(booking => [booking.id, booking])));
+      }).catch(() => {
+        if (!controller.signal.aborted) setPaymentBookings(prev => prev ?? new Map());
+      });
+      return () => controller.abort();
+    }, [needsPaymentData, revision, user.id, user.role]);
 
   useEffect(() => {
     if(user.role!=='USER')return;
@@ -284,38 +289,36 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       </>}
       <div className="actions"><button className="btn small" disabled={busy}>{busy?'Зачекайте…':codeStep?'Підтвердити':'Надіслати код'}</button><button type="button" className="text-button" disabled={busy} onClick={()=>openEditor(null)}>Скасувати</button></div>
     </form>}
-        <div className="table-heading">
-          <h3>Історія бронювань</h3>
-          <select
-            aria-label="Фільтр історії"
-            value={scope}
-            onChange={e => {
-              setLoading(true);
-              setHistoryError('');
-              setPaymentError('');
-              setConfirmCancel(null);
-              setScope(e.target.value);
-              setPage(0);
-            }}
-          >
-            <optgroup label="За часом">
-              <option value="all">Усі бронювання</option>
-              <option value="upcoming">Майбутні</option>
-              <option value="past">Минулі</option>
-            </optgroup>
-            <optgroup label="За статусом бронювання">
-              <option value="PENDING_PAYMENT">Очікують оплати</option>
-              <option value="CONFIRMED">Підтверджені</option>
-              <option value="COMPLETED">Завершені</option>
-              <option value="CANCELLED">Скасовані</option>
-            </optgroup>
-            <optgroup label="За оплатою">
-              <option value="PAID">Сплачені</option>
-              <option value="UNPAID">Не сплачені</option>
-              <option value="REFUND">Повернення коштів</option>
-            </optgroup>
-          </select>
-        </div>
+         <div className="profile-history-header">
+           <h3>Історія бронювань</h3>
+           <div className="profile-tabs" role="tablist" aria-label="Фільтр історії бронювань">
+             {(
+               [
+                 ['all', `Усі бронювання (${counts.all})`],
+                 ['upcoming', `Майбутні (${counts.upcoming})`],
+                 ['past', `Минулі (${counts.past})`],
+                 ['cancelled', `Скасовані (${counts.cancelled})`],
+               ] as const
+             ).map(([key, label]) => (
+               <button
+                 key={key}
+                 type="button"
+                 role="tab"
+                 aria-selected={scope === key}
+                 className={`profile-tab${scope === key ? ' active' : ''}`}
+                 onClick={() => {
+                   setHistoryError('');
+                   setPaymentError('');
+                   setConfirmCancel(null);
+                   setScope(key);
+                   setPage(0);
+                 }}
+               >
+                 {label}
+               </button>
+             ))}
+           </div>
+         </div>
     {cancelError && <Alert>{cancelError}</Alert>}
     {cancelNotice && <Alert success>{cancelNotice}</Alert>}
     {paymentError && <Alert>{paymentError}</Alert>}
