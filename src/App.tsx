@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import assets from './assets.json';
 import { api } from './api';
 import { ApiError, errorMessage, hasSession } from './api/client';
-import type { Availability, BookingType, HistoryItem, Tariff, User, Workspace } from './api/types';
-import { bookingValidation, displayWorkspace, endTime, isRetiredWorkspace, money, nextBookingSlot, venueTime, venueToday } from './booking';
+import type { Availability, BookingType, ClosedDay, HistoryItem, Tariff, User, Workspace } from './api/types';
+import { bookingCloseTime, bookingOpenTime, bookingValidation, displayWorkspace, endTime, isRetiredWorkspace, isWeekend, money, nextBookingSlot, venueTime, venueToday } from './booking';
 import { Alert, Icon, Logo, Modal, SectionTitle } from './components/ui';
 import { AuthModal } from './components/AuthModal';
 import { BookingModal } from './components/BookingModal';
@@ -28,6 +28,23 @@ const gallerySpaces = [
   { label: 'Зони відпочинку', photo: assets.imgPhotoContainer3 },
 ];
 type Selected = { workspace?: Workspace; type: BookingType; date: string; start: string; hours: number };
+function nextOpenDate(fromDate: string, closedSet: Set<string>): string {
+  const cursor = new Date(`${fromDate}T12:00:00Z`);
+  for (let i = 0; i < 60; i++) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const iso = cursor.toISOString().slice(0, 10);
+    if (!isWeekend(iso) && !closedSet.has(iso)) return iso;
+  }
+  return fromDate;
+}
+
+function formatUkrainianDay(isoDate: string): string {
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(`${isoDate}T12:00:00Z`));
+}
 export default function App() {
   const path = location.pathname.replace(/\/$/, '');
   const paymentPage = path === paymentSuccessPath;
@@ -37,6 +54,7 @@ export default function App() {
   const [sessionError,setSessionError]=useState('');
   const [workspaces,setWorkspaces]=useState<Workspace[]>([]);
   const [tariffs,setTariffs]=useState<Tariff[]>([]);
+  const [closedDays,setClosedDays]=useState<ClosedDay[]>([]);
   const [catalogError,setCatalogError]=useState('');
   const [catalogLoading,setCatalogLoading]=useState(true);
   const [availability,setAvailability]=useState<Availability[]>([]);
@@ -57,16 +75,22 @@ export default function App() {
   const [mobileNav,setMobileNav]=useState(false);
   const bookableWorkspaces=workspaces.filter(workspace=>!isRetiredWorkspace(workspace));
   const validation=bookingValidation(date,start,hours,'HOURLY',now);
+  const closedInfo = closedDays.find(d => d.date === date);
+  const closedMessage = closedInfo
+    ? `Коворкінг зачинений у вибраний день${closedInfo.reason ? ` (${closedInfo.reason})` : ''}. Найближчий робочий день — ${formatUkrainianDay(nextOpenDate(date, new Set(closedDays.map(d => d.date))))}, з ${bookingOpenTime} до ${bookingCloseTime}.`
+    : null;
+
   useEffect(()=>{
     if(date<venueToday(now)||(date===venueToday(now)&&start<=venueTime(now).slice(0,5))){
       const next=nextBookingSlot(now);setDate(next.date);setStart(next.start);
     }
   },[now,date,start]);
   useEffect(()=>{let active=true;setCatalogLoading(true);setCatalogError('');
-    Promise.allSettled([api.workspaces(),api.tariffs()]).then(([spaces,prices])=>{
+    Promise.allSettled([api.workspaces(),api.tariffs(), api.closedDays()]).then(([spaces,prices,closed])=>{
       if(!active)return;
       if(spaces.status==='fulfilled')setWorkspaces(spaces.value);
       if(prices.status==='fulfilled')setTariffs(prices.value);
+      if(closed.status==='fulfilled')setClosedDays(closed.value);
       if (spaces.status === 'rejected' && prices.status === 'rejected') {
         const reasons = new Set([errorMessage(spaces.reason, ''), errorMessage(prices.reason, '')]);
         setCatalogError(`Не вдалося завантажити місця й тарифи. ${[...reasons].filter(Boolean).join(' ')}`.trim());
@@ -105,7 +129,7 @@ export default function App() {
     if(bookableWorkspaces.some(w=>w.type===workspaceType))choose(workspace,type);
     else document.getElementById('booking')?.scrollIntoView({behavior:'smooth'});
   }
-  const price=(workspaceType:'DESK'|'MEETING_ROOM',type:BookingType,fallback:number) => type==='SUBSCRIPTION'?3500:tariffs.find(t=>t.workspaceType===workspaceType&&t.bookingType===type)?.price??fallback;
+  const price=(workspaceType:'DESK'|'MEETING_ROOM',type:BookingType,fallback:number) => tariffs.find(t=>t.workspaceType===workspaceType&&t.bookingType===type)?.price??fallback;
   const room=bookableWorkspaces.find(w=>w.type==='MEETING_ROOM');
   const desks=bookableWorkspaces.filter(w=>w.type==='DESK');
   const visibleDesks = desks.length ? desks : Array.from({ length: 5 }, () => undefined);
@@ -115,9 +139,15 @@ export default function App() {
   function deskCard(workspace:Workspace|undefined,index:number){
     const state=workspace?availability.find(w=>w.id===workspace.id):undefined;
     const free=state?.isAvailable;
+<<<<<<< HEAD
     const status=checking?'перевіряємо':free===true?'вільний':free===false?'недоступний':'немає даних';
     const label=workspace?displayWorkspace(workspace).replace(/^Робоче місце №/, 'Стіл #'):`Стіл #${index+1}`;
     return <button key={workspace?.id??`placeholder-${index}`} className={`desk ${free===true?'free':free===false?'occupied':'unknown'}`} style={{gridArea:index<6?`desk${index+1}`:undefined}} disabled={!workspace||free===false||checking||!!validation} onClick={()=>workspace&&choose(workspace)} aria-label={`${label}: ${status}`}><span className="desk-number">{index+1}</span><strong>{label}</strong><small>{status}</small></button>;
+=======
+    const status=checking?'Перевіряємо':free===true?'Вільний':free===false?'Недоступний':'Немає даних';
+    const label=workspace?displayWorkspace(workspace):`Робоче місце №${index+1}`;
+    return <button key={workspace?.id??`placeholder-${index}`} className={`desk ${free===true?'free':free===false?'occupied':'unknown'}`} style={{gridArea:index<6?`desk${index+1}`:undefined}} disabled={!workspace||free===false||checking||!!validation||!!closedInfo} onClick={()=>workspace&&choose(workspace)} aria-label={`${label}: ${status.toLocaleLowerCase('uk')}`}><span className="desk-number">{index+1}</span><strong>{label}</strong><small>{status}</small></button>;
+>>>>>>> 306043105f286ff245d8dd308d41656ef7da3a9e
   }
   const roomFree=room?availability.find(w=>w.id===room.id)?.isAvailable:undefined;
   const authDialog = authOpen && <AuthModal onClose={() => { setAuthOpen(false); setPending(null); }} onLogin={loggedIn} />;
@@ -161,10 +191,11 @@ export default function App() {
       <section id="booking"><SectionTitle title="Онлайн бронювання" description="Натисніть на бажане робоче місце або переговорну кімнату для перегляду доступності та швидкого оформлення бронювання."/>
         <div className="booking-controls"><label>Дата<input type="date" value={date} min={venueToday(now)} onChange={e=>setDate(e.target.value)}/></label><label>Початок<select value={start} onChange={e=>setStart(e.target.value)}>{Array.from({length:10},(_,i)=>`${String(i+9).padStart(2,'0')}:00`).map(t=><option key={t} disabled={!!bookingValidation(date,t,1,'HOURLY',now)}>{t}</option>)}</select></label><label>Тривалість<select value={hours} onChange={e=>setHours(Number(e.target.value))}>{[1,2,3,4].map(h=><option key={h} value={h} disabled={!!bookingValidation(date,start,h,'HOURLY',now)}>{h} год.</option>)}</select></label><button className="btn outline small" disabled={checking||catalogLoading} onClick={()=>setRevision(v=>v+1)}>Оновити</button></div>
 
-        {validation&&<Alert>{validation}</Alert>}{catalogError&&<Alert>{catalogError}</Alert>}{availabilityError&&<Alert>{availabilityError}</Alert>}
+        {validation&&<Alert>{validation}</Alert>}{!validation&&closedMessage&&<Alert>{closedMessage}</Alert>}{catalogError&&<Alert>{catalogError}</Alert>}{availabilityError&&<Alert>{availabilityError}</Alert>}
         {!user&&!authLoading&&!catalogError&&<p className="booking-signin"><button className="text-button" onClick={()=>choose(undefined)}>Забронювати місце</button></p>}
         {catalogLoading&&<p role="status" className="booking-signin">Завантажуємо простір…</p>}
         <p className="booking-signin">Доступність для {date}, {start}–{endTime(start,hours)} за Київським часом</p><div className="legend"><span><i className="free"/>Вільний стіл</span><span><i className="occupied"/>Недоступно</span></div>
+<<<<<<< HEAD
         <div className="booking-grid"><article className="meeting-card"><div className="meeting-heading"><div><p className="eyebrow">Окрема зона</p><h3>Переговорна кімната</h3></div><span className="icon-circle"><Icon name="imgIconPeople"/></span></div><ul className="room-features"><li><Icon name="imgGroup2"/>Безперервний інтернет</li><li><Icon name="imgIconLight"/>Світло 24/7</li><li><Icon name="imgIconCoffee"/>Кава та чай у вільному доступі</li><li><Icon name="imgIconGroup"/>До 5 людей</li></ul><div className="card-bottom"><div><small>{tariffs.length?'Вартість':'Орієнтовна вартість'}</small><strong>{money(price('MEETING_ROOM','HOURLY',200))}<small> / година</small></strong></div><button className="btn" disabled={!room||roomFree===false||checking||!!validation} onClick={()=>room&&choose(room)}>Обрати</button></div>{roomFree===false&&<small className="danger">Недоступна у вибраний час</small>}</article>
         <div className="floorplan">
           <h3>Кімната коворкінгу ({visibleDesks.length} {deskCountWord})</h3>
@@ -174,6 +205,10 @@ export default function App() {
             <img className="rest rest-right" src="/assets/rest-zone-right.png" alt="Зона відпочинку" width={178} height={112} loading="lazy" />
           </div>
         </div></div>
+=======
+        <div className="booking-grid"><article className="meeting-card"><div className="meeting-heading"><div><p className="eyebrow">Окрема зона</p><h3>Переговорна кімната</h3></div><span className="icon-circle"><Icon name="imgIconPeople"/></span></div><ul className="room-features"><li><Icon name="imgGroup2"/>Безперервний інтернет</li><li><Icon name="imgIconLight"/>Світло 24/7</li><li><Icon name="imgIconCoffee"/>Кава та чай у вільному доступі</li><li><Icon name="imgIconGroup"/>Приватний простір для команди</li></ul><div className="card-bottom"><div><small>{tariffs.length?'Вартість':'Орієнтовна вартість'}</small><strong>{money(price('MEETING_ROOM','HOURLY',200))}<small> / година</small></strong></div><button className="btn" disabled={!room||roomFree===false||checking||!!validation||!!closedInfo} onClick={()=>room&&choose(room)}>Обрати</button></div>{roomFree===false&&<small className="danger">Недоступна у вибраний час</small>}</article>
+        <div className="floorplan"><h3>{desks.length?`Робочі місця (${desks.length})`:"Схема робочих місць"}</h3><div className={`desk-map ${desks.length>5?'extra-desks':''}`}><div className="rest rest-left">Зона відпочинку</div>{(desks.length?desks:Array.from({length:5},()=>undefined)).map(deskCard)}<div className="rest rest-right">Зона відпочинку</div></div></div></div>
+>>>>>>> 306043105f286ff245d8dd308d41656ef7da3a9e
       </section>
       <section id="advantages"><SectionTitle title="Чому обирають Tviy.hub?" description="Ми знаємо, як важливо мати стабільне світло, швидкий інтернет та робочу тишу в умовах сьогодення. Тому у нас завжди комфортно, немає зайвого шуму, а кожна деталь продумана для високої продуктивності."/><div className="badges">{['Безперервний інтернет','Світло 24/7','Wi-Fi','Чай та кава у вільному доступі'].map(text=><span key={text}><Icon name="imgIconCheck1"/>{text}</span>)}</div><div className="gallery">{(['imgPhotoContainer','imgPhotoContainer1','imgPhotoContainer2','imgPhotoContainer3'] as const).map((name,i)=><img key={name} src={assets[name]} alt={['Затишний куточок із чашкою та осіннім декором','Робочі місця в коворкінгу','Гості працюють біля вікна','Крісло в зоні відпочинку'][i]} loading="lazy"/>)}</div></section>
       <section id="pricing"><SectionTitle title="Наші тарифні плани" description="Обирайте зручний формат: від кількох годин для термінового дзвінка до закріпленого власного столу на цілий місяць."/><div className="pricing-grid">{plans.map(plan=><article className="pricing-card" key={plan.title}><p className="eyebrow">{plan.label}</p><h3>{plan.title}</h3><div className="plan-price"><strong>{money(price(plan.workspaceType,plan.type,plan.reference))}</strong><span>{plan.unit}</span></div><ul className="checks">{plan.features.map(feature=><li key={feature}><Icon name="imgIconCheck"/>{feature}</li>)}</ul><button className="btn outline" disabled={user?.role==='ADMIN'&&plan.type==='SUBSCRIPTION'} onClick={()=>planChoice(plan.type,plan.workspaceType)}>{plan.type === 'HOURLY' ? 'Забронювати години' : 'Забронювати'}<Icon name="imgIconCalendar1"/></button></article>)}</div>{!tariffs.length&&<p className="muted centered">Орієнтовні ціни. Остаточну вартість буде підтверджено під час бронювання.</p>}</section>

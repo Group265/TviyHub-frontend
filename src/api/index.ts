@@ -1,5 +1,5 @@
 import { request, storeTokens } from './client';
-import type { AdminUser, Availability, Booking, BookingRequest, HistoryItem, InPersonPaymentMethod, Page, Payment, StripeBatchSession, StripeSession, Subscription, Tariff, Tokens, User, Workspace } from './types';
+import type { AdminUser, Availability, Booking, BookingRequest, BookingType, ClosedDay, HistoryItem, InPersonPaymentMethod, Page, Payment, StripeBatchSession, StripeSession, Subscription, Tariff, Tokens, User, Workspace, WorkspaceType } from './types';
 export const HISTORY_PAGE_SIZE = 10;
 const UPCOMING_BATCH_SIZE = 100;
 
@@ -81,4 +81,23 @@ export const api = {
     request<Payment>(`/admin/payments/${id}/status`, json('PUT', { status: 'PAID', paymentMethod }), true),
   confirmRefund: (id: number) =>
     request<Payment>(`/admin/payments/${id}/refund`, json('PATCH'), true),
+    closedDays: (signal?: AbortSignal) => request<ClosedDay[]>('/closed-days', { signal }),
+    createClosedDay: (data: { date: string; reason: string }) =>
+      request<ClosedDay>('/admin/closed-days', json('POST', data), true),
+    deleteClosedDay: (date: string) =>
+      request<void>(`/admin/closed-days/${date}`, json('DELETE'), true),
+    adminExtendSubscription: (id: number, days: number) =>
+      request<Subscription>(`/admin/subscriptions/${id}/extend?days=${days}`, json('PUT'), true),
+    createWorkspace: (data: { name: string; type: WorkspaceType }) =>
+      request<Workspace>('/admin/workspaces', json('POST', data), true),
+    updateWorkspace: (id: number, data: { name: string; type: WorkspaceType }) =>
+      request<Workspace>(`/admin/workspaces/${id}`, json('PUT', data), true),
+    deleteWorkspace: (id: number) =>
+      request<void>(`/admin/workspaces/${id}`, json('DELETE'), true),
+    createTariff: (data: { workspaceType: WorkspaceType; bookingType: BookingType; price: number }) =>
+      request<Tariff>('/admin/tariffs', json('POST', data), true),
+    updateTariff: (id: number, data: { workspaceType: WorkspaceType; bookingType: BookingType; price: number }) =>
+      request<Tariff>(`/admin/tariffs/${id}`, json('PUT', data), true),
+    deleteTariff: (id: number) =>
+      request<void>(`/admin/tariffs/${id}`, json('DELETE'), true),
 };
