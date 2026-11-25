@@ -208,9 +208,14 @@
   border-top: 1px solid var(--border);
   margin-top: auto;
 }
-.admin-modal input:focus-visible,
-.admin-modal select:focus-visible,
-.admin-modal button:focus-visible {
+.modal input:focus-visible,
+.modal select:focus-visible,
+.modal button:focus-visible {
   outline: 2px solid var(--orange);
   outline-offset: 2px;
 }
+
+.table-heading select {
+  max-width: 240px;
+}
+
