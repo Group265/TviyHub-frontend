@@ -244,7 +244,49 @@ export default function App() {
       </section>
       <section id="location"><SectionTitle title="Де нас знайти?" /><div className="location-grid"><div className="contacts"><div><span className="contact-icon"><Icon name="imgIconLocation" /></span><div><h4>Адреса</h4><p>м. Миколаїв, вул. Олексія Вадатурського, 1</p></div></div><div><span className="contact-icon"><Icon name="imgGroup3" /></span><div><h4>Графік роботи</h4><p>Пн–Пт 09:00–19:00.<br />Субота та неділя — вихідні.</p></div></div><div><span className="contact-icon"><Icon name="imgIconPhone" /></span><div><h4>Контакти</h4><a href="tel:+380998710595">+380 99 871 0595</a></div></div></div><div className="location-map"><iframe title="Твій хаб на карті — Миколаїв, вул. Олексія Вадатурського, 1" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2722.2252615539714!2d31.989338599999996!3d46.976910000000004!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40c5c9396fa069b3%3A0x4f2d8be6a025fb9f!2s%D0%A2%D0%B2%D1%96%D0%B9%20%D1%85%D0%B0%D0%B1%20%E2%80%94%20%D0%BC%D1%96%D0%BD%D1%96%D0%BA%D0%BE%D0%B2%D0%BE%D1%80%D0%BA%D1%96%D0%BD%D0%B3!5e0!3m2!1suk!2sua!4v1794827457765!5m2!1suk!2sua&amp;hl=uk" loading="lazy" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" /><a className="map-link" href="https://www.google.com/maps/search/?api=1&amp;hl=uk&amp;query=Миколаїв%20Олексія%20Вадатурського%201" target="_blank" rel="noreferrer">Відкрити на карті ↗</a></div></div></section>
     </main>
-    <footer><div className="container"><div className="footer-top"><Logo /><nav aria-label="Нижня навігація">{nav.filter(([id]) => id !== 'booking').map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}</nav><div className="footer-contact"><span><Icon name="imgIconLocation1" />м. Миколаїв, вул. Олексія Вадатурського, 1</span><a href="tel:+380998710595"><Icon name="imgIconPhone1" />+380 99 871 0595</a></div></div><div className="footer-bottom"><span>© 2026 Твій хаб. Всі права захищено.</span><button className="text-button muted" onClick={() => setPrivacy(true)}>Політика конфіденційності</button></div></div></footer>
+        <footer>
+      <div className="container">
+        <div className="footer-top">
+          <Logo />
+          <nav aria-label="Нижня навігація">
+            {nav.filter(([id]) => id !== 'booking').map(([id, label]) => (
+              <a key={id} href={`#${id}`}>{label}</a>
+            ))}
+          </nav>
+          <div className="footer-contact">
+            <span><Icon name="imgIconLocation1" />м. Миколаїв, вул. Олексія Вадатурського, 1</span>
+            <a href="tel:+380998710595"><Icon name="imgIconPhone1" />+380 99 871 0595</a>
+            <div className="footer-socials">
+              <a href="https://t.me" target="_blank" rel="noreferrer" aria-label="Telegram">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 5 2 12.5l7 1M21 5l-2.5 15L9 13.5M21 5 9 13.5m0 0V19l3.25-3.22" />
+                </svg>
+                @tviy_hub
+              </a>
+              <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                  <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+                </svg>
+                @tviy.hub
+              </a>
+              <a href="https://threads.net" target="_blank" rel="noreferrer" aria-label="Threads">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12a7 7 0 1 0-7 7c4.5 0 7-2.5 7-6.5 0-3.5-2.5-6-6.5-6-3.8 0-6.5 2.6-6.5 6.2 0 3.2 2.2 5.3 5 5.3 2.3 0 4-1.4 4-3.5 0-1.8-1.2-3-2.8-3-1.5 0-2.7 1.1-2.7 2.5s1.1 2.4 2.5 2.4c1.7 0 2.8-1.2 2.8-3.2V9.5" />
+                </svg>
+                @tviy.hub
+              </a>
+            </div>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <span>© 2026 Твій хаб. Всі права захищено.</span>
+          <button className="text-button muted" onClick={() => setPrivacy(true)}>Політика конфіденційності</button>
+        </div>
+      </div>
+    </footer>
+
     {authDialog}
     {bookingDialog}
     {profile && profileView}

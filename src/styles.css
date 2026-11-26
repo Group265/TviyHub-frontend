@@ -472,3 +472,27 @@
     grid-template-columns: 1fr;
   }
 }
+
+.footer-socials {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+}
+
+.footer-socials a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #212529;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.footer-socials a:hover {
+  color: var(--orange);
+}
+
+.footer-socials svg {
+  flex-shrink: 0;
+}
