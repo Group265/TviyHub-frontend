@@ -1282,11 +1282,11 @@ export function AdminModal({
 
                   return (
                     <tr key={payment.id}>
-                      <td>{dateLabel}</td>
+                      <td className="nowrap">{dateLabel}</td>
                       <td>{ownerId ? clientName(ownerId, clients[ownerId]) : 'Клієнт'}</td>
                       <td>{purpose}</td>
                       <td>{paymentMethodLabel(payment.paymentMethod)}</td>
-                      <td>
+                      <td className="nowrap">
                         <strong>{money(payment.amount)}</strong>
                       </td>
                       <td>

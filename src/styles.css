@@ -595,3 +595,6 @@
     grid-template-columns: 1fr;
   }
 }
+.nowrap {
+  white-space: nowrap;
+}
