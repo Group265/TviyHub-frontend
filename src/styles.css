@@ -472,19 +472,30 @@
     grid-template-columns: 1fr;
   }
 }
+/* Контакты и соцсети строго под телефоном в футере */
+.footer-contact {
+  align-items: flex-start;
+}
+
+.footer-phone-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 .footer-socials {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px 20px;
+  gap: 10px 16px;
 }
 
 .footer-socials a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: #212529;
+  gap: 5px;
+  color: #495057;
+  font-size: 13px;
   font-weight: 500;
   transition: color 0.15s;
 }
@@ -497,34 +508,3 @@
   flex-shrink: 0;
 }
 
-.top-contacts {
-  background: var(--cream);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 0;
-  font-size: 14px;
-}
-
-.top-contacts-inner {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 28px;
-}
-
-.top-contacts a {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #212529;
-  font-weight: 500;
-  transition: color 0.15s;
-}
-
-.top-contacts a:hover {
-  color: var(--orange);
-}
-
-.header {
-  padding-top: 20px;
-}
