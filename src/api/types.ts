@@ -22,3 +22,11 @@ export interface StripeSession { sessionUrl: string; sessionId: string }
 export interface StripeBatchSession { url: string; sessionId?: string }
 export type InPersonPaymentMethod = 'CASH' | 'CARD';
 export interface ClosedDay { date: string; reason: string;}
+export interface GalleryImageItem {
+  id: number;
+  caption?: string | null;
+  contentType: string;
+  sizeBytes: number;
+  url?: string;
+  createdAt: string;
+}

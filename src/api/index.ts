@@ -1,9 +1,12 @@
-import { request, storeTokens } from './client';
-import type { AdminUser, Availability, Booking, BookingRequest, BookingType, ClosedDay, HistoryItem, InPersonPaymentMethod, Page, Payment, StripeBatchSession, StripeSession, Subscription, Tariff, Tokens, User, Workspace, WorkspaceType } from './types';
+import { API_BASE, request, storeTokens } from './client';
+import type { AdminUser, Availability, Booking, BookingRequest, BookingType, ClosedDay, GalleryImageItem, HistoryItem, InPersonPaymentMethod, Page, Payment, StripeBatchSession, StripeSession, Subscription, Tariff, Tokens, User, Workspace, WorkspaceType } from './types';
 export const HISTORY_PAGE_SIZE = 10;
 const UPCOMING_BATCH_SIZE = 100;
-
 const json = (method: string, data?: unknown): RequestInit => ({ method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+export function galleryImageUrl(item: Pick<GalleryImageItem, 'id' | 'url'>): string {
+  if (item.url && /^https?:\/\//i.test(item.url)) return item.url;
+  return `${API_BASE}/gallery/${item.id}/image`;
+}
 export const api = {
   workspaces: () => request<Workspace[]>('/workspaces'),
   tariffs: () => request<Tariff[]>('/tariffs'),
@@ -100,4 +103,14 @@ export const api = {
       request<Tariff>(`/admin/tariffs/${id}`, json('PUT', data), true),
     deleteTariff: (id: number) =>
       request<void>(`/admin/tariffs/${id}`, json('DELETE'), true),
+    gallery: (page = 0, size = 100, signal?: AbortSignal) =>
+        request<Page<GalleryImageItem>>(`/gallery?page=${page}&size=${size}`, { signal }),
+      uploadGalleryImage: (file: File, caption?: string) => {
+        const form = new FormData();
+        form.append('file', file);
+        if (caption?.trim()) form.append('caption', caption.trim());
+        return request<GalleryImageItem>('/admin/gallery', { method: 'POST', body: form }, true);
+      },
+      deleteGalleryImage: (id: number) =>
+        request<void>(`/admin/gallery/${id}`, { method: 'DELETE' }, true),
 };

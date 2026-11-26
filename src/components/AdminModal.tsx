@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { api, galleryImageUrl } from '../api';
 import { bookingAlreadyStartedError, errorMessage } from '../api/errors';
 import type {
   AdminUser,
@@ -7,6 +7,7 @@ import type {
   Booking,
   BookingType,
   ClosedDay,
+  GalleryImageItem,
   InPersonPaymentMethod,
   Page,
   Payment,
@@ -28,7 +29,7 @@ import { Alert, Modal, Pager } from './ui';
 import { useVenueClock } from '../useVenueClock';
 
 const pageSize = 10;
-type Tab = 'users' | 'bookings' | 'subscriptions' | 'payments' | 'closedDays' | 'workspaces' | 'tariffs';
+type Tab = 'users' | 'bookings' | 'subscriptions' | 'payments' | 'closedDays' | 'workspaces' | 'tariffs' | 'gallery';
 
 type Action =
   | { type: 'user'; user: AdminUser; blocked: boolean }
@@ -38,7 +39,8 @@ type Action =
   | { type: 'cancelSubscription'; subscription: Subscription }
   | { type: 'deleteClosedDay'; date: string }
   | { type: 'deleteWorkspace'; workspace: Workspace }
-  | { type: 'deleteTariff'; tariff: Tariff };
+  | { type: 'deleteTariff'; tariff: Tariff }
+  | { type: 'deleteGalleryImage'; image: GalleryImageItem };
 
 const clientName = (userId: number, client?: AdminUser) => client?.name || 'Клієнт №' + userId;
 
@@ -94,6 +96,7 @@ function confirmationText(action: Action): string {
   if (action.type === 'deleteClosedDay') return `Скасувати статус неробочого дня для ${action.date}?`;
   if (action.type === 'deleteWorkspace') return `Видалити робоче місце «${action.workspace.name}»?`;
   if (action.type === 'deleteTariff') return `Видалити обраний тариф?`;
+  if (action.type === 'deleteGalleryImage') return `Видалити фото №${action.image.id} з галереї?`;
   const verb = action.blocked ? 'видалити (заблокувати)' : 'відновити';
   return `Ви впевнені, що хочете ${verb} користувача «${action.user.name}»?`;
 }
@@ -154,7 +157,10 @@ export function AdminModal({
   const [tfWorkspaceType, setTfWorkspaceType] = useState<WorkspaceType>('DESK');
   const [tfBookingType, setTfBookingType] = useState<BookingType>('HOURLY');
   const [tfPrice, setTfPrice] = useState('150');
-
+  const [galleryImages, setGalleryImages] = useState<GalleryImageItem[]>([]);
+  const [galleryFile, setGalleryFile] = useState<File | null>(null);
+  const [galleryCategory, setGalleryCategory] = useState<string>('Зони відпочинку');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const backButton = useRef<HTMLButtonElement>(null);
   const now = venueDateTime(useVenueClock());
   const canConfirm = confirm && (confirm.type !== 'cancel' || canCancelBooking(confirm.booking, now));
@@ -256,6 +262,12 @@ export function AdminModal({
 const tariffRows = await api.tariffs();
 if (signal.aborted) return;
 setTariffs(tariffRows);
+}
+if (tab === 'gallery') {
+  const res = await api.gallery(0, 100, signal);
+  if (signal.aborted) return;
+  setGalleryImages(res.content);
+  return;
 }
 }
 load()
@@ -393,6 +405,9 @@ setNotice(`Робоче місце «${confirm.workspace.name}» видален�
 } else if (confirm.type === 'deleteTariff') {
 await api.deleteTariff(confirm.tariff.id);
 setNotice('Тариф видалено.');
+} else if (confirm.type === 'deleteGalleryImage') {
+        await api.deleteGalleryImage(confirm.image.id);
+        setNotice(`Фото №${confirm.image.id} видалено.`);
 } else {
 await api.cancel(confirm.booking.id);
 setNotice(`Бронювання №${confirm.booking.id} скасовано.`);
@@ -526,6 +541,50 @@ setError(errorMessage(err, 'Не вдалося зберегти тариф.'));
 setBusy(false);
 }
 }
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+  function handleGalleryFileChange(file: File | null) {
+    setError('');
+    setNotice('');
+    if (!file) {
+      setGalleryFile(null);
+      return;
+    }
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setGalleryFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setError('Дозволені лише формати JPG, PNG або WebP.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setGalleryFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setError('Максимальний розмір файлу — 5 МБ.');
+      return;
+    }
+    setGalleryFile(file);
+  }
+
+  async function handleGalleryUpload(e: FormEvent) {
+    e.preventDefault();
+    if (!galleryFile || busy) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api.uploadGalleryImage(galleryFile, galleryCategory);
+      setGalleryFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setNotice('Фото успішно завантажено до галереї.');
+      setRevision(v => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err, 'Не вдалося завантажити фото.'));
+    } finally {
+      setBusy(false);
+    }
+  }
 const listLength =
 tab === 'bookings'
 ? filteredBookings.length
@@ -570,6 +629,9 @@ className="admin-modal"
         </button>
         <button className={tab === 'tariffs' ? 'btn' : 'btn outline'} disabled={busy} onClick={() => changeTab('tariffs')}>
           Тарифи
+        </button>
+        <button className={tab === 'gallery' ? 'btn' : 'btn outline'} disabled={busy} onClick={() => changeTab('gallery')}>
+          Галерея
         </button>
       </div>
 
@@ -1308,7 +1370,71 @@ className="admin-modal"
             </button>
           </div>
         </div>
-      ) : (
+            ) : tab === 'gallery' ? (
+              <div className="admin-gallery">
+                <form className="closed-day-form" onSubmit={handleGalleryUpload}>
+                  <label className="closed-day-label">
+                    Додати фото до галереї (JPG, PNG або WebP, до 5 МБ)
+                    <div className="closed-day-row">
+                      <select
+                        value={galleryCategory}
+                        disabled={busy}
+                        onChange={e => setGalleryCategory(e.target.value)}
+                      >
+                        <option value="Переговорна кімната">Переговорна кімната</option>
+                        <option value="Кімната коворкінгу">Кімната коворкінгу</option>
+                        <option value="Кухня">Кухня</option>
+                        <option value="Зони відпочинку">Зони відпочинку</option>
+                      </select>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        required
+                        disabled={busy}
+                        onChange={e => handleGalleryFileChange(e.target.files?.[0] ?? null)}
+                      />
+                      <button type="submit" className="btn small" disabled={busy || !galleryFile}>
+                        {busy ? 'Завантаження…' : 'Завантажити +'}
+                      </button>
+                    </div>
+                  </label>
+                </form>
+
+                {galleryImages.length ? (
+                  <div className="admin-tariffs-grid">
+                    {galleryImages.map(img => (
+                      <article className="pricing-card admin-tariff-card" key={img.id}>
+                        <div style={{ aspectRatio: '16 / 10', borderRadius: 12, overflow: 'hidden', marginBottom: 12, background: '#eee' }}>
+                          <img
+                            src={galleryImageUrl(img)}
+                            alt={img.caption || `Фото №${img.id}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            loading="lazy"
+                          />
+                        </div>
+                        <strong>{img.caption || 'Без категорії'}</strong>
+                        <small className="muted" style={{ marginBottom: 12 }}>
+                          {(img.sizeBytes / (1024 * 1024)).toFixed(2)} МБ · {img.contentType.replace('image/', '').toUpperCase()}
+                        </small>
+                        <div className="admin-tariff-actions">
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            disabled={busy}
+                            onClick={() => ask({ type: 'deleteGalleryImage', image: img })}
+                          >
+                            Видалити
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty">Завантажених фото поки немає (відображаються стандартні фото сайту).</p>
+                )}
+              </div>
+            ) : (
         <div>
           <div className="admin-tariffs-grid">
             {tariffs.map(tariff => {

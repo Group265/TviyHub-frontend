@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import assets from './assets.json';
-import { api } from './api';
+import { api, galleryImageUrl } from './api';
 import { ApiError, errorMessage, hasSession } from './api/client';
-import type { Availability, BookingType, ClosedDay, HistoryItem, Tariff, User, Workspace } from './api/types';
+import type { Availability, BookingType, ClosedDay, GalleryImageItem, HistoryItem, Tariff, User, Workspace } from './api/types';
 import { bookingCloseTime, bookingOpenTime, bookingValidation, displayWorkspace, endTime, isRetiredWorkspace, isWeekend, money, nextBookingSlot, venueTime, venueToday } from './booking';
 import { Alert, Icon, Logo, Modal, SectionTitle } from './components/ui';
 import { AuthModal } from './components/AuthModal';
@@ -65,6 +65,7 @@ export default function App() {
   const [sessionError,setSessionError]=useState('');
   const [workspaces,setWorkspaces]=useState<Workspace[]>([]);
   const [tariffs,setTariffs]=useState<Tariff[]>([]);
+  const [uploadedPhotos, setUploadedPhotos] = useState<GalleryImageItem[]>([]);
   const [closedDays,setClosedDays]=useState<ClosedDay[]>([]);
   const [catalogError,setCatalogError]=useState('');
   const [catalogLoading,setCatalogLoading]=useState(true);
@@ -98,11 +99,12 @@ export default function App() {
     }
   },[now,date,start]);
   useEffect(()=>{let active=true;setCatalogLoading(true);setCatalogError('');
-    Promise.allSettled([api.workspaces(),api.tariffs(), api.closedDays()]).then(([spaces,prices,closed])=>{
+    Promise.allSettled([api.workspaces(), api.tariffs(), api.closedDays(), api.gallery(0, 100)]).then(([spaces, prices, closed, gallery]) => {
       if(!active)return;
       if(spaces.status==='fulfilled')setWorkspaces(spaces.value);
       if(prices.status==='fulfilled')setTariffs(prices.value);
       if(closed.status==='fulfilled')setClosedDays(closed.value);
+      if (gallery.status === 'fulfilled') setUploadedPhotos(gallery.value.content);
       if (spaces.status === 'rejected' && prices.status === 'rejected') {
         const reasons = new Set([errorMessage(spaces.reason, ''), errorMessage(prices.reason, '')]);
         setCatalogError(`Не вдалося завантажити місця й тарифи. ${[...reasons].filter(Boolean).join(' ')}`.trim());
@@ -180,6 +182,12 @@ export default function App() {
       {bookingDialog}
     </>;
   }
+const mergedAlbums = galleryAlbums.map(album => {
+  const extra = uploadedPhotos
+    .filter(item => item.caption === album.label)
+    .map(item => galleryImageUrl(item));
+  return { ...album, photos: [...album.photos, ...extra] };
+});
   return <>
     <a className="skip" href="#main">Перейти до вмісту</a>
     <header className="container header" id="home"><Logo/><button className="mobile-menu btn outline small" aria-label="Відкрити меню" aria-expanded={mobileNav} onClick={()=>setMobileNav(v=>!v)}>Меню</button><nav className={mobileNav?'expanded':''} aria-label="Головна навігація">{navLinks}</nav><div className="header-actions">{user?.role==='ADMIN'&&<button className="btn outline small" onClick={()=>setAdmin(true)}>Адмін-панель</button>}<button className="btn outline small" disabled={authLoading} onClick={()=>user?setProfile(true):setAuthOpen(true)}>{authLoading?'Зачекайте…':user?'Мій профіль':'Увійти'}</button></div></header>
@@ -216,7 +224,7 @@ export default function App() {
                description="Зазирніть усередину нашого затишного коворкінгу: світлі робочі зони, окрема переговорна кімната та куточок для перезавантаження з ароматним чаєм."
              />
              <div className="gallery spaces-gallery">
-               {galleryAlbums.map(album => (
+               {mergedAlbums.map(album => (
                  <button
                    key={album.label}
                    type="button"

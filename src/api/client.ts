@@ -1,7 +1,7 @@
 import { ApiError } from './errors';
 import type { Tokens } from './types';
-
-const BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const BASE = API_BASE;
 const SESSION_KEY = 'tviy-hub-session';
 type Session = Tokens & { expiresAt: number };
 let session: Session | null = readSession();
