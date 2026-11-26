@@ -84,33 +84,33 @@ export const api = {
     request<Payment>(`/admin/payments/${id}/status`, json('PUT', { status: 'PAID', paymentMethod }), true),
   confirmRefund: (id: number) =>
     request<Payment>(`/admin/payments/${id}/refund`, json('PATCH'), true),
-    closedDays: (signal?: AbortSignal) => request<ClosedDay[]>('/closed-days', { signal }),
-    createClosedDay: (data: { date: string; reason: string }) =>
-      request<ClosedDay>('/admin/closed-days', json('POST', data), true),
-    deleteClosedDay: (date: string) =>
-      request<void>(`/admin/closed-days/${date}`, json('DELETE'), true),
-    adminExtendSubscription: (id: number, days: number) =>
-      request<Subscription>(`/admin/subscriptions/${id}/extend?days=${days}`, json('PUT'), true),
-    createWorkspace: (data: { name: string; type: WorkspaceType }) =>
-      request<Workspace>('/admin/workspaces', json('POST', data), true),
-    updateWorkspace: (id: number, data: { name: string; type: WorkspaceType }) =>
-      request<Workspace>(`/admin/workspaces/${id}`, json('PUT', data), true),
-    deleteWorkspace: (id: number) =>
-      request<void>(`/admin/workspaces/${id}`, json('DELETE'), true),
-    createTariff: (data: { workspaceType: WorkspaceType; bookingType: BookingType; price: number }) =>
-      request<Tariff>('/admin/tariffs', json('POST', data), true),
-    updateTariff: (id: number, data: { workspaceType: WorkspaceType; bookingType: BookingType; price: number }) =>
-      request<Tariff>(`/admin/tariffs/${id}`, json('PUT', data), true),
-    deleteTariff: (id: number) =>
-      request<void>(`/admin/tariffs/${id}`, json('DELETE'), true),
-    gallery: (page = 0, size = 100, signal?: AbortSignal) =>
-        request<Page<GalleryImageItem>>(`/gallery?page=${page}&size=${size}`, { signal }),
-      uploadGalleryImage: (file: File, caption?: string) => {
-        const form = new FormData();
-        form.append('file', file);
-        if (caption?.trim()) form.append('caption', caption.trim());
-        return request<GalleryImageItem>('/admin/gallery', { method: 'POST', body: form }, true);
-      },
-      deleteGalleryImage: (id: number) =>
-        request<void>(`/admin/gallery/${id}`, { method: 'DELETE' }, true),
+  closedDays: (signal?: AbortSignal) => request<ClosedDay[]>('/closed-days', { signal }),
+  createClosedDay: (data: { date: string; reason: string }) =>
+    request<ClosedDay>('/admin/closed-days', json('POST', data), true),
+  deleteClosedDay: (date: string) =>
+    request<void>(`/admin/closed-days/${date}`, json('DELETE'), true),
+  adminExtendSubscription: (id: number, days: number) =>
+    request<Subscription>(`/admin/subscriptions/${id}/extend?days=${days}`, json('PUT'), true),
+  createWorkspace: (data: { name: string; type: WorkspaceType }) =>
+    request<Workspace>('/admin/workspaces', json('POST', data), true),
+  updateWorkspace: (id: number, data: { name: string; type: WorkspaceType }) =>
+    request<Workspace>(`/admin/workspaces/${id}`, json('PUT', data), true),
+  deleteWorkspace: (id: number) =>
+    request<void>(`/admin/workspaces/${id}`, json('DELETE'), true),
+  createTariff: (data: { workspaceType: WorkspaceType; bookingType: BookingType; price: number }) =>
+    request<Tariff>('/admin/tariffs', json('POST', data), true),
+  updateTariff: (id: number, data: { workspaceType: WorkspaceType; bookingType: BookingType; price: number }) =>
+    request<Tariff>(`/admin/tariffs/${id}`, json('PUT', data), true),
+  deleteTariff: (id: number) =>
+    request<void>(`/admin/tariffs/${id}`, json('DELETE'), true),
+  gallery: (page = 0, size = 100, signal?: AbortSignal) =>
+    request<Page<GalleryImageItem>>(`/gallery?page=${page}&size=${size}`, { signal }),
+  uploadGalleryImage: (file: File, caption?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (caption?.trim()) form.append('caption', caption.trim());
+    return request<GalleryImageItem>('/admin/gallery', { method: 'POST', body: form }, true);
+  },
+  deleteGalleryImage: (id: number) =>
+    request<void>(`/admin/gallery/${id}`, { method: 'DELETE' }, true),
 };

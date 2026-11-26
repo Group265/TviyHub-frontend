@@ -77,7 +77,7 @@ async function refresh(): Promise<void> {
       .then(tokens => { if (revision === currentRevision) storeTokens(tokens); })
       .catch(error => {
         // A transient network error must not silently discard the refresh token.
-        if (revision === currentRevision && error instanceof ApiError && [400,401,403].includes(error.status)) clearSession();
+        if (revision === currentRevision && error instanceof ApiError && [400, 401, 403].includes(error.status)) clearSession();
         throw error;
       })
       .finally(() => { refreshFlight = null; });

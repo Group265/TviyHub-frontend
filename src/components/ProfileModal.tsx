@@ -20,136 +20,136 @@ function reusesCurrentPassword(form: FormData): boolean {
 }
 
 export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, standalone = false }: { user: User; onClose: () => void; onUser: (u: User | null) => void; onRepeat: (w: Workspace, item: HistoryItem) => void; onLogoutError: (message: string) => void; standalone?: boolean }) {
-    const [allHistory, setAllHistory] = useState<HistoryItem[]>([]);
-    const [historyError, setHistoryError] = useState('');
-    const [subscriptionError, setSubscriptionError] = useState('');
-    const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-    const [page, setPage] = useState(0);
-    const [scope, setScope] = useState<'all' | 'upcoming' | 'past' | 'cancelled'>('all');
-    const [revision, setRevision] = useState(0);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [edit, setEdit] = useState<'details' | 'password' | null>(null);
-    const [codeStep, setCodeStep] = useState(false);
-    const [busy, setBusy] = useState(false);
-    const [notice, setNotice] = useState('');
-    const [cancelError, setCancelError] = useState('');
-    const [cancelNotice, setCancelNotice] = useState('');
-    const [confirmCancel, setConfirmCancel] = useState<HistoryItem | null>(null);
-    const [confirmCancelSub, setConfirmCancelSub] = useState<Subscription | null>(null);
-    const [subCancelError, setSubCancelError] = useState('');
-    const [subCancelNotice, setSubCancelNotice] = useState('');
-    const [paymentError, setPaymentError] = useState('');
-    const [paymentBookings, setPaymentBookings] = useState<Map<number, Booking> | null>(null);
-    const leavingForCheckout = useRef(false);
-    const detailsPanelId = useId();
-    const passwordPanelId = useId();
-    const passwordErrorId = useId();
-    const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
-    const now = venueDateTime(useVenueClock());
+  const [allHistory, setAllHistory] = useState<HistoryItem[]>([]);
+  const [historyError, setHistoryError] = useState('');
+  const [subscriptionError, setSubscriptionError] = useState('');
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [page, setPage] = useState(0);
+  const [scope, setScope] = useState<'all' | 'upcoming' | 'past' | 'cancelled'>('all');
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [edit, setEdit] = useState<'details' | 'password' | null>(null);
+  const [codeStep, setCodeStep] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [cancelError, setCancelError] = useState('');
+  const [cancelNotice, setCancelNotice] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState<HistoryItem | null>(null);
+  const [confirmCancelSub, setConfirmCancelSub] = useState<Subscription | null>(null);
+  const [subCancelError, setSubCancelError] = useState('');
+  const [subCancelNotice, setSubCancelNotice] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentBookings, setPaymentBookings] = useState<Map<number, Booking> | null>(null);
+  const leavingForCheckout = useRef(false);
+  const detailsPanelId = useId();
+  const passwordPanelId = useId();
+  const passwordErrorId = useId();
+  const showPasswordReuseError = edit === 'password' && !codeStep && error === passwordReuseError;
+  const now = venueDateTime(useVenueClock());
 
-    const { counts, filteredItems } = useMemo(() => {
-      const upcomingList: HistoryItem[] = [];
-      const pastList: HistoryItem[] = [];
-      const cancelledList: HistoryItem[] = [];
+  const { counts, filteredItems } = useMemo(() => {
+    const upcomingList: HistoryItem[] = [];
+    const pastList: HistoryItem[] = [];
+    const cancelledList: HistoryItem[] = [];
 
-      for (const item of allHistory) {
-        const displayStatus = bookingDisplayStatus(item, now);
-        if (displayStatus === 'CANCELLED') {
-          cancelledList.push(item);
-        } else if (isUpcomingBooking(item, now) || displayStatus === 'PENDING_PAYMENT') {
-          upcomingList.push(item);
-        } else {
-          pastList.push(item);
-        }
+    for (const item of allHistory) {
+      const displayStatus = bookingDisplayStatus(item, now);
+      if (displayStatus === 'CANCELLED') {
+        cancelledList.push(item);
+      } else if (isUpcomingBooking(item, now) || displayStatus === 'PENDING_PAYMENT') {
+        upcomingList.push(item);
+      } else {
+        pastList.push(item);
       }
+    }
 
-      const currentList =
-        scope === 'upcoming'
-          ? upcomingList
-          : scope === 'past'
-            ? pastList
-            : scope === 'cancelled'
-              ? cancelledList
-              : allHistory;
+    const currentList =
+      scope === 'upcoming'
+        ? upcomingList
+        : scope === 'past'
+          ? pastList
+          : scope === 'cancelled'
+            ? cancelledList
+            : allHistory;
 
-      return {
-        counts: {
-          all: allHistory.length,
-          upcoming: upcomingList.length,
-          past: pastList.length,
-          cancelled: cancelledList.length,
-        },
-        filteredItems: currentList,
-      };
-    }, [allHistory, scope, now]);
+    return {
+      counts: {
+        all: allHistory.length,
+        upcoming: upcomingList.length,
+        past: pastList.length,
+        cancelled: cancelledList.length,
+      },
+      filteredItems: currentList,
+    };
+  }, [allHistory, scope, now]);
 
-    const totalPages = Math.ceil(filteredItems.length / HISTORY_PAGE_SIZE);
-    const visiblePage = Math.min(page, Math.max(0, totalPages - 1));
-    const visibleHistory = filteredItems.slice(
-      visiblePage * HISTORY_PAGE_SIZE,
-      (visiblePage + 1) * HISTORY_PAGE_SIZE,
-    );
-    const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
-    const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
-    const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
-    const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
-      (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
-        (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
-
-    useEffect(() => {
-      function restoreProfile(event: PageTransitionEvent) {
-        if (!event.persisted || !leavingForCheckout.current) return;
-        leavingForCheckout.current = false;
-        setBusy(false);
-        setRevision(value => value + 1);
-      }
-      window.addEventListener('pageshow', restoreProfile);
-      return () => window.removeEventListener('pageshow', restoreProfile);
-    }, []);
-
-    useEffect(() => {
-      const controller = new AbortController();
-      const { signal } = controller;
-      setLoading(true);
-      setHistoryError('');
-      const load = async () => {
-        const first = await api.history(0, 'all', signal);
-        const items = [...first.content];
-        for (let p = 1; p < first.totalPages; p++) {
-          const next = await api.history(p, 'all', signal);
-          items.push(...next.content);
-        }
-        if (!signal.aborted) setAllHistory(items);
-      };
-      load().catch(err => {
-        if (!signal.aborted) setHistoryError(`Не вдалося завантажити історію бронювань. ${errorMessage(err, '')}`.trim());
-      }).finally(() => {
-        if (!signal.aborted) setLoading(false);
-      });
-      return () => controller.abort();
-    }, [revision]);
-
-    useEffect(() => {
-      if (!needsPaymentData) return;
-      const controller = new AbortController();
-      api.bookings(controller.signal, user.role === 'ADMIN' ? user.id : undefined).then(bookings => {
-        if (!controller.signal.aborted) setPaymentBookings(new Map(bookings.map(booking => [booking.id, booking])));
-      }).catch(() => {
-        if (!controller.signal.aborted) setPaymentBookings(prev => prev ?? new Map());
-      });
-      return () => controller.abort();
-    }, [needsPaymentData, revision, user.id, user.role]);
+  const totalPages = Math.ceil(filteredItems.length / HISTORY_PAGE_SIZE);
+  const visiblePage = Math.min(page, Math.max(0, totalPages - 1));
+  const visibleHistory = filteredItems.slice(
+    visiblePage * HISTORY_PAGE_SIZE,
+    (visiblePage + 1) * HISTORY_PAGE_SIZE,
+  );
+  const activeSubscriptions = subscriptions.filter(item => isCurrentSubscription(item, now.slice(0, 10)));
+  const canConfirmCancel = confirmCancel && canCancelBooking(confirmCancel, now);
+  const canConfirmCancelSub = confirmCancelSub && canUserCancelSubscription(confirmCancelSub, now);
+  const needsPaymentData = visibleHistory.some(item => !item.paymentStatus ||
+    (user.role === 'USER' && item.status === 'PENDING_PAYMENT' &&
+      (!getPaymentId(item) || (!item.createdAt && !item.paymentDeadline))));
 
   useEffect(() => {
-    if(user.role!=='USER')return;
-    let active=true;
-    setSubscriptionError('');
-    api.subscriptions().then(items=>{if(active)setSubscriptions(items);}).catch(err=>{
-      if(active)setSubscriptionError(`Не вдалося завантажити абонементи. ${errorMessage(err, '')}`.trim());
+    function restoreProfile(event: PageTransitionEvent) {
+      if (!event.persisted || !leavingForCheckout.current) return;
+      leavingForCheckout.current = false;
+      setBusy(false);
+      setRevision(value => value + 1);
+    }
+    window.addEventListener('pageshow', restoreProfile);
+    return () => window.removeEventListener('pageshow', restoreProfile);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    setLoading(true);
+    setHistoryError('');
+    const load = async () => {
+      const first = await api.history(0, 'all', signal);
+      const items = [...first.content];
+      for (let p = 1; p < first.totalPages; p++) {
+        const next = await api.history(p, 'all', signal);
+        items.push(...next.content);
+      }
+      if (!signal.aborted) setAllHistory(items);
+    };
+    load().catch(err => {
+      if (!signal.aborted) setHistoryError(`Не вдалося завантажити історію бронювань. ${errorMessage(err, '')}`.trim());
+    }).finally(() => {
+      if (!signal.aborted) setLoading(false);
     });
-    return()=>{active=false;};
-  },[user.role,revision]);
+    return () => controller.abort();
+  }, [revision]);
+
+  useEffect(() => {
+    if (!needsPaymentData) return;
+    const controller = new AbortController();
+    api.bookings(controller.signal, user.role === 'ADMIN' ? user.id : undefined).then(bookings => {
+      if (!controller.signal.aborted) setPaymentBookings(new Map(bookings.map(booking => [booking.id, booking])));
+    }).catch(() => {
+      if (!controller.signal.aborted) setPaymentBookings(prev => prev ?? new Map());
+    });
+    return () => controller.abort();
+  }, [needsPaymentData, revision, user.id, user.role]);
+
+  useEffect(() => {
+    if (user.role !== 'USER') return;
+    let active = true;
+    setSubscriptionError('');
+    api.subscriptions().then(items => { if (active) setSubscriptions(items); }).catch(err => {
+      if (active) setSubscriptionError(`Не вдалося завантажити абонементи. ${errorMessage(err, '')}`.trim());
+    });
+    return () => { active = false; };
+  }, [user.role, revision]);
   useEffect(() => {
     if (confirmCancel && !canConfirmCancel) setConfirmCancel(null);
   }, [confirmCancel, canConfirmCancel]);
@@ -170,16 +170,16 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
     setNotice('');
   }
 
-  async function submitPassword(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();if(busy||edit!=='password')return;
-    const form=new FormData(e.currentTarget);const get=(name:string)=>String(form.get(name)||'');
+  async function submitPassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); if (busy || edit !== 'password') return;
+    const form = new FormData(e.currentTarget); const get = (name: string) => String(form.get(name) || '');
     if (!codeStep && reusesCurrentPassword(form)) {
       setError(passwordReuseError);
       return;
     }
-    setBusy(true);setError('');setNotice('');
-    try{
-      if(!codeStep){
+    setBusy(true); setError(''); setNotice('');
+    try {
+      if (!codeStep) {
         const newPassword = get('newPassword');
         const confirmNewPassword = get('confirmNewPassword');
         if (newPassword !== confirmNewPassword) { setError(passwordsMismatch); return; }
@@ -187,11 +187,11 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
         await api.requestChange('password', { newPassword, confirmNewPassword, currentPassword });
         setCodeStep(true);
         setNotice('Введіть код, який надійшов на електронну адресу вашого профілю.');
-      }else{
+      } else {
         await api.confirmChange('password', get('code'));
-        clearSession();onUser(null);onClose();
+        clearSession(); onUser(null); onClose();
       }
-    }catch(err){setError(errorMessage(err));}finally{setBusy(false);}
+    } catch (err) { setError(errorMessage(err)); } finally { setBusy(false); }
   }
   async function cancel(booking: HistoryItem) {
     if (busy) return;
@@ -262,8 +262,8 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
     }
   }
   const content = <>
-    <div className="profile-head"><div className="avatar" aria-hidden="true">{user.name.slice(0,1)}</div><div><h3>{user.name}</h3><p className="profile-contacts"><span><Icon name="imgProfileEmail"/>{user.email}</span><span><Icon name="imgProfilePhone"/>{user.phone||'Телефон не вказаний'}</span></p></div></div>
-    {!user.emailVerified&&<Alert>Пошта не підтверджена. Завершіть реєстрацію за допомогою коду з листа.</Alert>}
+    <div className="profile-head"><div className="avatar" aria-hidden="true">{user.name.slice(0, 1)}</div><div><h3>{user.name}</h3><p className="profile-contacts"><span><Icon name="imgProfileEmail" />{user.email}</span><span><Icon name="imgProfilePhone" />{user.phone || 'Телефон не вказаний'}</span></p></div></div>
+    {!user.emailVerified && <Alert>Пошта не підтверджена. Завершіть реєстрацію за допомогою коду з листа.</Alert>}
     <div className="actions">
       <button type="button" className={`btn small${edit === 'details' ? '' : ' outline'}`} disabled={busy}
         aria-expanded={edit === 'details'} aria-controls={edit === 'details' ? detailsPanelId : undefined}
@@ -273,52 +273,52 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
         onClick={() => openEditor('password')}>Пароль</button>
       <button className="text-button muted" disabled={busy} onClick={signout}>Вийти</button>
     </div>
-    {error&&!showPasswordReuseError&&<Alert>{error}</Alert>}{notice&&<Alert success>{notice}</Alert>}
+    {error && !showPasswordReuseError && <Alert>{error}</Alert>}{notice && <Alert success>{notice}</Alert>}
     {edit === 'details' && <ProfileDetailsEditor id={detailsPanelId} user={user} busy={busy} onBusy={setBusy} onUser={onUser}
       onCancel={() => openEditor(null)} onSaved={() => { setEdit(null); setNotice('Дані збережено.'); }} />}
     {edit === 'password' && <form {...ukrainianFormValidation} id={passwordPanelId} className="form edit-panel" onSubmit={submitPassword} key={String(codeStep)}><h3>Зміна пароля</h3>
-      {codeStep?<label>Код із листа<input name="code" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code"/></label>:<>
-        <label>Поточний пароль<input name="currentPassword" type="password" required autoComplete="current-password" onInput={checkPasswordReuse}/></label>
-          <div>
-            <label>Новий пароль<input name="newPassword" type="password" minLength={8} maxLength={72} required autoComplete="new-password"
-              onInput={checkPasswordReuse} aria-invalid={showPasswordReuseError || undefined}
-              aria-describedby={showPasswordReuseError ? passwordErrorId : undefined}/></label>
-            {showPasswordReuseError && <p id={passwordErrorId} className="danger" role="alert">{passwordReuseError}</p>}
-          </div>
-          <label>Підтвердження нового пароля<input name="confirmNewPassword" type="password" maxLength={72} required autoComplete="new-password"/></label>
+      {codeStep ? <label>Код із листа<input name="code" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" /></label> : <>
+        <label>Поточний пароль<input name="currentPassword" type="password" required autoComplete="current-password" onInput={checkPasswordReuse} /></label>
+        <div>
+          <label>Новий пароль<input name="newPassword" type="password" minLength={8} maxLength={72} required autoComplete="new-password"
+            onInput={checkPasswordReuse} aria-invalid={showPasswordReuseError || undefined}
+            aria-describedby={showPasswordReuseError ? passwordErrorId : undefined} /></label>
+          {showPasswordReuseError && <p id={passwordErrorId} className="danger" role="alert">{passwordReuseError}</p>}
+        </div>
+        <label>Підтвердження нового пароля<input name="confirmNewPassword" type="password" maxLength={72} required autoComplete="new-password" /></label>
       </>}
-      <div className="actions"><button className="btn small" disabled={busy}>{busy?'Зачекайте…':codeStep?'Підтвердити':'Надіслати код'}</button><button type="button" className="text-button" disabled={busy} onClick={()=>openEditor(null)}>Скасувати</button></div>
+      <div className="actions"><button className="btn small" disabled={busy}>{busy ? 'Зачекайте…' : codeStep ? 'Підтвердити' : 'Надіслати код'}</button><button type="button" className="text-button" disabled={busy} onClick={() => openEditor(null)}>Скасувати</button></div>
     </form>}
-         <div className="profile-history-header">
-           <h3>Історія бронювань</h3>
-           <div className="profile-tabs" role="tablist" aria-label="Фільтр історії бронювань">
-             {(
-               [
-                 ['all', `Усі бронювання (${counts.all})`],
-                 ['upcoming', `Майбутні (${counts.upcoming})`],
-                 ['past', `Минулі (${counts.past})`],
-                 ['cancelled', `Скасовані (${counts.cancelled})`],
-               ] as const
-             ).map(([key, label]) => (
-               <button
-                 key={key}
-                 type="button"
-                 role="tab"
-                 aria-selected={scope === key}
-                 className={`profile-tab${scope === key ? ' active' : ''}`}
-                 onClick={() => {
-                   setHistoryError('');
-                   setPaymentError('');
-                   setConfirmCancel(null);
-                   setScope(key);
-                   setPage(0);
-                 }}
-               >
-                 {label}
-               </button>
-             ))}
-           </div>
-         </div>
+    <div className="profile-history-header">
+      <h3>Історія бронювань</h3>
+      <div className="profile-tabs" role="tablist" aria-label="Фільтр історії бронювань">
+        {(
+          [
+            ['all', `Усі бронювання (${counts.all})`],
+            ['upcoming', `Майбутні (${counts.upcoming})`],
+            ['past', `Минулі (${counts.past})`],
+            ['cancelled', `Скасовані (${counts.cancelled})`],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={scope === key}
+            className={`profile-tab${scope === key ? ' active' : ''}`}
+            onClick={() => {
+              setHistoryError('');
+              setPaymentError('');
+              setConfirmCancel(null);
+              setScope(key);
+              setPage(0);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
     {cancelError && <Alert>{cancelError}</Alert>}
     {cancelNotice && <Alert success>{cancelNotice}</Alert>}
     {paymentError && <Alert>{paymentError}</Alert>}
@@ -340,59 +340,60 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
             });
             const latest = deadline ?? start;
             return <tr key={item.id}>
-            <td>{item.bookingDate}</td><td>{displayWorkspace(item.workspace)}</td>
-            <td>{item.startTime?.slice(0,5) ?? bookingOpenTime}–{item.endTime?.slice(0,5) ?? bookingCloseTime}</td>
-            <td>{money(item.totalPrice)}<small>{pendingPayment ? <span className="status">{statusText(item.status)}</span> : statusText(bookingDisplayStatus(item, now))}</small>
-              {pendingPayment && deadline && <small>{paymentDeadlineText(deadline)}</small>}
-            </td>
-            <td>{paymentLabel}</td>
-            <td><div className="actions">
-              {user.role === 'USER' && pendingPayment && <button type="button" className="btn outline small"
-                disabled={busy || !paymentId || latest <= now}
-                onClick={() => { if (paymentId) payOnline(item, paymentId, latest); }}>Оплатити онлайн</button>}
-              {!pendingPayment && !isRetiredWorkspace(item.workspace) && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace,item)}>Повторити</button>}
-              {canCancelBooking(item, now) && <button className="text-button danger" disabled={busy} onClick={() => {
-                setCancelError('');setCancelNotice('');setConfirmCancel(item);
-              }}>Скасувати</button>}
-            </div>{user.role === 'USER' && pendingPayment && (latest <= now || !paymentId) && <small>
-              {latest <= now ? 'Строк оплати минув.' : 'Онлайн-оплата недоступна.'}
-            </small>}</td>
-          </tr>;})}</tbody>
+              <td>{item.bookingDate}</td><td>{displayWorkspace(item.workspace)}</td>
+              <td>{item.startTime?.slice(0, 5) ?? bookingOpenTime}–{item.endTime?.slice(0, 5) ?? bookingCloseTime}</td>
+              <td>{money(item.totalPrice)}<small>{pendingPayment ? <span className="status">{statusText(item.status)}</span> : statusText(bookingDisplayStatus(item, now))}</small>
+                {pendingPayment && deadline && <small>{paymentDeadlineText(deadline)}</small>}
+              </td>
+              <td>{paymentLabel}</td>
+              <td><div className="actions">
+                {user.role === 'USER' && pendingPayment && <button type="button" className="btn outline small"
+                  disabled={busy || !paymentId || latest <= now}
+                  onClick={() => { if (paymentId) payOnline(item, paymentId, latest); }}>Оплатити онлайн</button>}
+                {!pendingPayment && !isRetiredWorkspace(item.workspace) && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace, item)}>Повторити</button>}
+                {canCancelBooking(item, now) && <button className="text-button danger" disabled={busy} onClick={() => {
+                  setCancelError(''); setCancelNotice(''); setConfirmCancel(item);
+                }}>Скасувати</button>}
+              </div>{user.role === 'USER' && pendingPayment && (latest <= now || !paymentId) && <small>
+                {latest <= now ? 'Строк оплати минув.' : 'Онлайн-оплата недоступна.'}
+              </small>}</td>
+            </tr>;
+          })}</tbody>
         </table>
       </div> : <p className="empty">{scope === 'upcoming' ? 'Майбутніх бронювань немає.' : 'У цьому розділі немає бронювань.'}</p>}
-      <Pager page={visiblePage} total={totalPages} change={setPage}/>
+      <Pager page={visiblePage} total={totalPages} change={setPage} />
     </>}
-       {canConfirmCancel && confirmCancel && (
-         <Modal
-           title="Скасування бронювання"
-           onClose={() => {
-             if (!busy) setConfirmCancel(null);
-           }}
-         >
-           <p>Скасувати бронювання №{confirmCancel.id}?</p>
-           {cancelError && <Alert>{cancelError}</Alert>}
-           <div className="actions align-right" style={{ marginTop: 24 }}>
-             <button
-               type="button"
-               className="btn outline small"
-               disabled={busy}
-               onClick={() => setConfirmCancel(null)}
-             >
-               Залишити
-             </button>
-             <button
-               type="button"
-               className="btn small"
-               disabled={busy}
-               onClick={() => cancel(confirmCancel)}
-             >
-               {busy ? 'Зачекайте…' : 'Так, скасувати'}
-             </button>
-           </div>
-         </Modal>
-       )}
+    {canConfirmCancel && confirmCancel && (
+      <Modal
+        title="Скасування бронювання"
+        onClose={() => {
+          if (!busy) setConfirmCancel(null);
+        }}
+      >
+        <p>Скасувати бронювання №{confirmCancel.id}?</p>
+        {cancelError && <Alert>{cancelError}</Alert>}
+        <div className="actions align-right" style={{ marginTop: 24 }}>
+          <button
+            type="button"
+            className="btn outline small"
+            disabled={busy}
+            onClick={() => setConfirmCancel(null)}
+          >
+            Залишити
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            disabled={busy}
+            onClick={() => cancel(confirmCancel)}
+          >
+            {busy ? 'Зачекайте…' : 'Так, скасувати'}
+          </button>
+        </div>
+      </Modal>
+    )}
 
-        {subscriptionError && <Alert>{subscriptionError}</Alert>}
+    {subscriptionError && <Alert>{subscriptionError}</Alert>}
     {subCancelError && <Alert>{subCancelError}</Alert>}
     {subCancelNotice && <Alert success>{subCancelNotice}</Alert>}
     {activeSubscriptions.length > 0 && <>
@@ -411,36 +412,36 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
         </table>
       </div>
     </>}
-        {canConfirmCancelSub && confirmCancelSub && (
-          <Modal
-            title="Скасування абонементу"
-            onClose={() => {
-              if (!busy) setConfirmCancelSub(null);
-            }}
+    {canConfirmCancelSub && confirmCancelSub && (
+      <Modal
+        title="Скасування абонементу"
+        onClose={() => {
+          if (!busy) setConfirmCancelSub(null);
+        }}
+      >
+        <p>Скасувати абонемент №{confirmCancelSub.id}?</p>
+        {subCancelError && <Alert>{subCancelError}</Alert>}
+        <div className="actions align-right" style={{ marginTop: 24 }}>
+          <button
+            type="button"
+            className="btn outline small"
+            disabled={busy}
+            onClick={() => setConfirmCancelSub(null)}
           >
-            <p>Скасувати абонемент №{confirmCancelSub.id}?</p>
-            {subCancelError && <Alert>{subCancelError}</Alert>}
-            <div className="actions align-right" style={{ marginTop: 24 }}>
-              <button
-                type="button"
-                className="btn outline small"
-                disabled={busy}
-                onClick={() => setConfirmCancelSub(null)}
-              >
-                Залишити
-              </button>
-              <button
-                type="button"
-                className="btn small"
-                disabled={busy}
-                onClick={() => cancelSubscription(confirmCancelSub)}
-              >
-                {busy ? 'Зачекайте…' : 'Так, скасувати'}
-              </button>
-            </div>
-          </Modal>
-        )}
+            Залишити
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            disabled={busy}
+            onClick={() => cancelSubscription(confirmCancelSub)}
+          >
+            {busy ? 'Зачекайте…' : 'Так, скасувати'}
+          </button>
+        </div>
+      </Modal>
+    )}
     <p className="muted small-copy">Погодинну бронь можна скасувати щонайменше за 2 години, денну та абонемент — за добу.</p>
-    </>;
+  </>;
   return standalone ? content : <Modal title="Мій профіль" onClose={() => { if (!busy) onClose(); }} wide>{content}</Modal>;
 }

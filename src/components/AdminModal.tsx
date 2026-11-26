@@ -138,21 +138,17 @@ export function AdminModal({
   const [revision, setRevision] = useState(0);
   const [confirm, setConfirm] = useState<Action | null>(null);
 
-  // Форма неробочого дня
   const [newClosedDate, setNewClosedDate] = useState('');
   const [newClosedReason, setNewClosedReason] = useState('');
 
-  // Модалка продовження абонементу
   const [extendSub, setExtendSub] = useState<Subscription | null>(null);
   const [extendEndDate, setExtendEndDate] = useState('');
   const [extendReason, setExtendReason] = useState('');
 
-  // Модалка робочого місця (створення / редагування)
   const [workspaceModal, setWorkspaceModal] = useState<{ mode: 'create' | 'edit'; item?: Workspace } | null>(null);
   const [wsName, setWsName] = useState('');
   const [wsType, setWsType] = useState<WorkspaceType>('DESK');
 
-  // Модалка тарифу (створення / редагування)
   const [tariffModal, setTariffModal] = useState<{ mode: 'create' | 'edit'; item?: Tariff } | null>(null);
   const [tfWorkspaceType, setTfWorkspaceType] = useState<WorkspaceType>('DESK');
   const [tfBookingType, setTfBookingType] = useState<BookingType>('HOURLY');
@@ -259,288 +255,288 @@ export function AdminModal({
       }
 
       if (tab === 'tariffs') {
-const tariffRows = await api.tariffs();
-if (signal.aborted) return;
-setTariffs(tariffRows);
-}
-if (tab === 'gallery') {
-  const res = await api.gallery(0, 100, signal);
-  if (signal.aborted) return;
-  setGalleryImages(res.content);
-  return;
-}
-}
-load()
-.catch(err => {
-if (signal.aborted) return;
-setLoadError(errorMessage(err, 'Не вдалося завантажити дані адмін-панелі.'));
-})
-.finally(() => {
-if (!signal.aborted) setLoading(false);
-});
-return () => controller.abort();
-}, [tab, page, revision]);
-const bookingPayments = useMemo(
-() => new Map(payments.filter(p => p.bookingId != null).map(p => [p.bookingId!, p])),
-[payments],
-);
-const subscriptionPayments = useMemo(
-() => new Map(payments.filter(p => p.subscriptionId != null).map(p => [p.subscriptionId!, p])),
-[payments],
-);
-const bookingsById = useMemo(() => new Map(bookings.map(b => [b.id, b])), [bookings]);
-const subscriptionsById = useMemo(() => new Map(subscriptions.map(s => [s.id, s])), [subscriptions]);
-const bookingsCountByUser = useMemo(() => {
-const counts: Record<number, number> = {};
-for (const b of bookings) {
-counts[b.userId] = (counts[b.userId] ?? 0) + 1;
-}
-return counts;
-}, [bookings]);
-const monthlySubPrice = useMemo(
-() => tariffs.find(t => t.bookingType === 'SUBSCRIPTION')?.price ?? 3500,
-[tariffs],
-);
-const hourlyPriceByType = useMemo(() => {
-const map: Partial<Record<WorkspaceType, number>> = {};
-for (const t of tariffs) {
-if (t.bookingType === 'HOURLY') map[t.workspaceType] = t.price;
-}
-return map;
-}, [tariffs]);
-const filteredBookings = useMemo(() => {
-return bookings.filter(booking => {
-const displayStatus = bookingDisplayStatus(booking, now);
-const payStatus = bookingPayments.get(booking.id)?.status ?? booking.paymentStatus;
-if (bookingStatusFilter === 'UPCOMING') {
-const isFuture = booking.bookingDate >= now.slice(0, 10) && displayStatus !== 'CANCELLED' && displayStatus !== 'COMPLETED';
-if (!isFuture) return false;
-} else if (bookingStatusFilter !== 'ALL' && displayStatus !== bookingStatusFilter) {
-return false;
-}
-if (bookingPaymentFilter === 'ACTION_REQUIRED') {
-    const needsPayment = payStatus === 'UNPAID' && displayStatus !== 'CANCELLED';
-    const needsRefund = payStatus === 'REFUND_PENDING';
-    if (!needsPayment && !needsRefund) return false;
-} else if (bookingPaymentFilter !== 'ALL' && payStatus !== bookingPaymentFilter) {
-return false;
-}
-return true;
-});
-}, [bookings, bookingPayments, bookingStatusFilter, bookingPaymentFilter, now]);
-const filteredSubscriptions = useMemo(() => {
-return subscriptions.filter(sub => {
-const payStatus = subscriptionPayments.get(sub.id)?.status ?? sub.paymentStatus;
-if (subStatusFilter !== 'ALL' && sub.status !== subStatusFilter) return false;
-if (subPaymentFilter === 'ACTION_REQUIRED') {
-    const needsPayment = payStatus === 'UNPAID' && sub.status !== 'CANCELLED';
-    const needsRefund = payStatus === 'REFUND_PENDING';
-    if (!needsPayment && !needsRefund) return false;
-} else if (subPaymentFilter !== 'ALL' && payStatus !== subPaymentFilter) {
-return false;
-}
-return true;
-});
-}, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter]);
-const filteredPayments = useMemo(() => {
-return payments.filter(p => {
-if (paymentFilter === 'ACTION_REQUIRED') {
-return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
-}
-return paymentFilter === 'ALL' || p.status === paymentFilter;
-});
-}, [payments, paymentFilter]);
-function changeTab(next: Tab) {
-setTab(next);
-setPage(0);
-setBookingStatusFilter('ALL');
-setBookingPaymentFilter('ALL');
-setSubStatusFilter('ALL');
-setSubPaymentFilter('ALL');
-setPaymentFilter('ALL');
-setError('');
-setNotice('');
-setConfirm(null);
-}
-function ask(action: Action) {
-setError('');
-setNotice('');
-setConfirm(action);
-}
-async function perform() {
-if (!confirm || busy) return;
-setError('');
-if (confirm.type === 'cancel' && !canCancelBooking(confirm.booking, venueDateTime())) {
-setConfirm(null);
-setError(bookingAlreadyStartedError);
-return;
-}
-setBusy(true);
-try {
-if (confirm.type === 'user') {
-const updated = await api.setUserBlocked(confirm.user.id, confirm.blocked);
-setUsers(
-current => current && { ...current, content: current.content.map(u => (u.id === updated.id ? updated : u)) },
-);
-setNotice(
-updated.blocked
-? `Користувача ${updated.name} видалено (заблоковано).`
-: `Доступ ${updated.name} відновлено.`,
-);
-} else if (confirm.type === 'payment') {
-await api.updatePayment(confirm.payment.id, confirm.method);
-setNotice(`Оплату за ${confirm.label} підтверджено.`);
-} else if (confirm.type === 'refund') {
-await api.confirmRefund(confirm.payment.id);
-setNotice(`Повернення коштів за ${confirm.label} оформлено.`);
-} else if (confirm.type === 'cancelSubscription') {
-await api.adminCancelSubscription(confirm.subscription.id);
-setNotice(`Абонемент №${confirm.subscription.id} скасовано.`);
-} else if (confirm.type === 'deleteClosedDay') {
-await api.deleteClosedDay(confirm.date);
-setNotice(`Неробочий день ${confirm.date} скасовано.`);
-} else if (confirm.type === 'deleteWorkspace') {
-await api.deleteWorkspace(confirm.workspace.id);
-setNotice(`Робоче місце «${confirm.workspace.name}» видалено.`);
-} else if (confirm.type === 'deleteTariff') {
-await api.deleteTariff(confirm.tariff.id);
-setNotice('Тариф видалено.');
-} else if (confirm.type === 'deleteGalleryImage') {
+        const tariffRows = await api.tariffs();
+        if (signal.aborted) return;
+        setTariffs(tariffRows);
+      }
+      if (tab === 'gallery') {
+        const res = await api.gallery(0, 100, signal);
+        if (signal.aborted) return;
+        setGalleryImages(res.content);
+        return;
+      }
+    }
+    load()
+      .catch(err => {
+        if (signal.aborted) return;
+        setLoadError(errorMessage(err, 'Не вдалося завантажити дані адмін-панелі.'));
+      })
+      .finally(() => {
+        if (!signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [tab, page, revision]);
+  const bookingPayments = useMemo(
+    () => new Map(payments.filter(p => p.bookingId != null).map(p => [p.bookingId!, p])),
+    [payments],
+  );
+  const subscriptionPayments = useMemo(
+    () => new Map(payments.filter(p => p.subscriptionId != null).map(p => [p.subscriptionId!, p])),
+    [payments],
+  );
+  const bookingsById = useMemo(() => new Map(bookings.map(b => [b.id, b])), [bookings]);
+  const subscriptionsById = useMemo(() => new Map(subscriptions.map(s => [s.id, s])), [subscriptions]);
+  const bookingsCountByUser = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const b of bookings) {
+      counts[b.userId] = (counts[b.userId] ?? 0) + 1;
+    }
+    return counts;
+  }, [bookings]);
+  const monthlySubPrice = useMemo(
+    () => tariffs.find(t => t.bookingType === 'SUBSCRIPTION')?.price ?? 3500,
+    [tariffs],
+  );
+  const hourlyPriceByType = useMemo(() => {
+    const map: Partial<Record<WorkspaceType, number>> = {};
+    for (const t of tariffs) {
+      if (t.bookingType === 'HOURLY') map[t.workspaceType] = t.price;
+    }
+    return map;
+  }, [tariffs]);
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(booking => {
+      const displayStatus = bookingDisplayStatus(booking, now);
+      const payStatus = bookingPayments.get(booking.id)?.status ?? booking.paymentStatus;
+      if (bookingStatusFilter === 'UPCOMING') {
+        const isFuture = booking.bookingDate >= now.slice(0, 10) && displayStatus !== 'CANCELLED' && displayStatus !== 'COMPLETED';
+        if (!isFuture) return false;
+      } else if (bookingStatusFilter !== 'ALL' && displayStatus !== bookingStatusFilter) {
+        return false;
+      }
+      if (bookingPaymentFilter === 'ACTION_REQUIRED') {
+        const needsPayment = payStatus === 'UNPAID' && displayStatus !== 'CANCELLED';
+        const needsRefund = payStatus === 'REFUND_PENDING';
+        if (!needsPayment && !needsRefund) return false;
+      } else if (bookingPaymentFilter !== 'ALL' && payStatus !== bookingPaymentFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [bookings, bookingPayments, bookingStatusFilter, bookingPaymentFilter, now]);
+  const filteredSubscriptions = useMemo(() => {
+    return subscriptions.filter(sub => {
+      const payStatus = subscriptionPayments.get(sub.id)?.status ?? sub.paymentStatus;
+      if (subStatusFilter !== 'ALL' && sub.status !== subStatusFilter) return false;
+      if (subPaymentFilter === 'ACTION_REQUIRED') {
+        const needsPayment = payStatus === 'UNPAID' && sub.status !== 'CANCELLED';
+        const needsRefund = payStatus === 'REFUND_PENDING';
+        if (!needsPayment && !needsRefund) return false;
+      } else if (subPaymentFilter !== 'ALL' && payStatus !== subPaymentFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter]);
+  const filteredPayments = useMemo(() => {
+    return payments.filter(p => {
+      if (paymentFilter === 'ACTION_REQUIRED') {
+        return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
+      }
+      return paymentFilter === 'ALL' || p.status === paymentFilter;
+    });
+  }, [payments, paymentFilter]);
+  function changeTab(next: Tab) {
+    setTab(next);
+    setPage(0);
+    setBookingStatusFilter('ALL');
+    setBookingPaymentFilter('ALL');
+    setSubStatusFilter('ALL');
+    setSubPaymentFilter('ALL');
+    setPaymentFilter('ALL');
+    setError('');
+    setNotice('');
+    setConfirm(null);
+  }
+  function ask(action: Action) {
+    setError('');
+    setNotice('');
+    setConfirm(action);
+  }
+  async function perform() {
+    if (!confirm || busy) return;
+    setError('');
+    if (confirm.type === 'cancel' && !canCancelBooking(confirm.booking, venueDateTime())) {
+      setConfirm(null);
+      setError(bookingAlreadyStartedError);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (confirm.type === 'user') {
+        const updated = await api.setUserBlocked(confirm.user.id, confirm.blocked);
+        setUsers(
+          current => current && { ...current, content: current.content.map(u => (u.id === updated.id ? updated : u)) },
+        );
+        setNotice(
+          updated.blocked
+            ? `Користувача ${updated.name} видалено (заблоковано).`
+            : `Доступ ${updated.name} відновлено.`,
+        );
+      } else if (confirm.type === 'payment') {
+        await api.updatePayment(confirm.payment.id, confirm.method);
+        setNotice(`Оплату за ${confirm.label} підтверджено.`);
+      } else if (confirm.type === 'refund') {
+        await api.confirmRefund(confirm.payment.id);
+        setNotice(`Повернення коштів за ${confirm.label} оформлено.`);
+      } else if (confirm.type === 'cancelSubscription') {
+        await api.adminCancelSubscription(confirm.subscription.id);
+        setNotice(`Абонемент №${confirm.subscription.id} скасовано.`);
+      } else if (confirm.type === 'deleteClosedDay') {
+        await api.deleteClosedDay(confirm.date);
+        setNotice(`Неробочий день ${confirm.date} скасовано.`);
+      } else if (confirm.type === 'deleteWorkspace') {
+        await api.deleteWorkspace(confirm.workspace.id);
+        setNotice(`Робоче місце «${confirm.workspace.name}» видалено.`);
+      } else if (confirm.type === 'deleteTariff') {
+        await api.deleteTariff(confirm.tariff.id);
+        setNotice('Тариф видалено.');
+      } else if (confirm.type === 'deleteGalleryImage') {
         await api.deleteGalleryImage(confirm.image.id);
         setNotice(`Фото №${confirm.image.id} видалено.`);
-} else {
-await api.cancel(confirm.booking.id);
-setNotice(`Бронювання №${confirm.booking.id} скасовано.`);
-}
-setConfirm(null);
-setRevision(v => v + 1);
-onChanged();
-} catch (err) {
-setError(errorMessage(err, 'Не вдалося виконати дію.'));
-} finally {
-setBusy(false);
-}
-}
-async function handleAddClosedDay(e: FormEvent) {
-e.preventDefault();
-if (!newClosedDate || !newClosedReason.trim() || busy) return;
-setBusy(true);
-setError('');
-setNotice('');
-try {
-await api.createClosedDay({ date: newClosedDate, reason: newClosedReason.trim() });
-setNewClosedDate('');
-setNewClosedReason('');
-setNotice('Неробочий день додано.');
-setRevision(v => v + 1);
-onChanged();
-} catch (err) {
-setError(errorMessage(err, 'Не вдалося додати неробочий день.'));
-} finally {
-setBusy(false);
-}
-}
-function openExtendModal(sub: Subscription) {
-setError('');
-setNotice('');
-setExtendSub(sub);
-setExtendEndDate(addDays(sub.endDate, 7));
-setExtendReason('');
-}
-async function handleExtendSubmit(e: FormEvent) {
-e.preventDefault();
-if (!extendSub || !extendEndDate || busy) return;
-const days = diffDays(extendSub.endDate, extendEndDate);
-if (days <= 0) {
-setError('Нова дата завершення має бути пізнішою за поточну.');
-return;
-}
-setBusy(true);
-setError('');
-try {
-await api.adminExtendSubscription(extendSub.id, days);
-setExtendSub(null);
-setNotice(`Абонемент №${extendSub.id} продовжено на ${days} дн.`);
-setRevision(v => v + 1);
-onChanged();
-} catch (err) {
-setError(errorMessage(err, 'Не вдалося продовжити абонемент.'));
-} finally {
-setBusy(false);
-}
-}
-function openWorkspaceModal(mode: 'create' | 'edit', item?: Workspace) {
-setError('');
-setNotice('');
-setWorkspaceModal({ mode, item });
-setWsName(item?.name ?? '');
-setWsType(item?.type ?? 'DESK');
-}
-async function handleWorkspaceSubmit(e: FormEvent) {
-e.preventDefault();
-if (!workspaceModal || !wsName.trim() || busy) return;
-setBusy(true);
-setError('');
-try {
-if (workspaceModal.mode === 'edit' && workspaceModal.item) {
-await api.updateWorkspace(workspaceModal.item.id, { name: wsName.trim(), type: wsType });
-setNotice(`Робоче місце «${wsName.trim()}» оновлено.`);
-} else {
-await api.createWorkspace({ name: wsName.trim(), type: wsType });
-setNotice(`Робоче місце «${wsName.trim()}» створено.`);
-}
-setWorkspaceModal(null);
-setRevision(v => v + 1);
-onChanged();
-} catch (err) {
-setError(errorMessage(err, 'Не вдалося зберегти робоче місце.'));
-} finally {
-setBusy(false);
-}
-}
-function openTariffModal(mode: 'create' | 'edit', item?: Tariff) {
-setError('');
-setNotice('');
-setTariffModal({ mode, item });
-setTfWorkspaceType(item?.workspaceType ?? 'DESK');
-setTfBookingType(item?.bookingType ?? 'HOURLY');
-setTfPrice(item ? String(item.price) : '150');
-}
-async function handleTariffSubmit(e: FormEvent) {
-e.preventDefault();
-if (!tariffModal || busy) return;
-const numericPrice = Number(tfPrice);
-if (Number.isNaN(numericPrice) || numericPrice < 0) {
-setError('Введіть коректну вартість.');
-return;
-}
-setBusy(true);
-setError('');
-try {
-if (tariffModal.mode === 'edit' && tariffModal.item) {
-await api.updateTariff(tariffModal.item.id, {
-workspaceType: tfWorkspaceType,
-bookingType: tfBookingType,
-price: numericPrice,
-});
-setNotice('Тариф оновлено.');
-} else {
-await api.createTariff({
-workspaceType: tfWorkspaceType,
-bookingType: tfBookingType,
-price: numericPrice,
-});
-setNotice('Новий тариф додано.');
-}
-setTariffModal(null);
-setRevision(v => v + 1);
-onChanged();
-} catch (err) {
-setError(errorMessage(err, 'Не вдалося зберегти тариф.'));
-} finally {
-setBusy(false);
-}
-}
+      } else {
+        await api.cancel(confirm.booking.id);
+        setNotice(`Бронювання №${confirm.booking.id} скасовано.`);
+      }
+      setConfirm(null);
+      setRevision(v => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err, 'Не вдалося виконати дію.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function handleAddClosedDay(e: FormEvent) {
+    e.preventDefault();
+    if (!newClosedDate || !newClosedReason.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api.createClosedDay({ date: newClosedDate, reason: newClosedReason.trim() });
+      setNewClosedDate('');
+      setNewClosedReason('');
+      setNotice('Неробочий день додано.');
+      setRevision(v => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err, 'Не вдалося додати неробочий день.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function openExtendModal(sub: Subscription) {
+    setError('');
+    setNotice('');
+    setExtendSub(sub);
+    setExtendEndDate(addDays(sub.endDate, 7));
+    setExtendReason('');
+  }
+  async function handleExtendSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!extendSub || !extendEndDate || busy) return;
+    const days = diffDays(extendSub.endDate, extendEndDate);
+    if (days <= 0) {
+      setError('Нова дата завершення має бути пізнішою за поточну.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api.adminExtendSubscription(extendSub.id, days);
+      setExtendSub(null);
+      setNotice(`Абонемент №${extendSub.id} продовжено на ${days} дн.`);
+      setRevision(v => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err, 'Не вдалося продовжити абонемент.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function openWorkspaceModal(mode: 'create' | 'edit', item?: Workspace) {
+    setError('');
+    setNotice('');
+    setWorkspaceModal({ mode, item });
+    setWsName(item?.name ?? '');
+    setWsType(item?.type ?? 'DESK');
+  }
+  async function handleWorkspaceSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!workspaceModal || !wsName.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (workspaceModal.mode === 'edit' && workspaceModal.item) {
+        await api.updateWorkspace(workspaceModal.item.id, { name: wsName.trim(), type: wsType });
+        setNotice(`Робоче місце «${wsName.trim()}» оновлено.`);
+      } else {
+        await api.createWorkspace({ name: wsName.trim(), type: wsType });
+        setNotice(`Робоче місце «${wsName.trim()}» створено.`);
+      }
+      setWorkspaceModal(null);
+      setRevision(v => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err, 'Не вдалося зберегти робоче місце.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function openTariffModal(mode: 'create' | 'edit', item?: Tariff) {
+    setError('');
+    setNotice('');
+    setTariffModal({ mode, item });
+    setTfWorkspaceType(item?.workspaceType ?? 'DESK');
+    setTfBookingType(item?.bookingType ?? 'HOURLY');
+    setTfPrice(item ? String(item.price) : '150');
+  }
+  async function handleTariffSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!tariffModal || busy) return;
+    const numericPrice = Number(tfPrice);
+    if (Number.isNaN(numericPrice) || numericPrice < 0) {
+      setError('Введіть коректну вартість.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      if (tariffModal.mode === 'edit' && tariffModal.item) {
+        await api.updateTariff(tariffModal.item.id, {
+          workspaceType: tfWorkspaceType,
+          bookingType: tfBookingType,
+          price: numericPrice,
+        });
+        setNotice('Тариф оновлено.');
+      } else {
+        await api.createTariff({
+          workspaceType: tfWorkspaceType,
+          bookingType: tfBookingType,
+          price: numericPrice,
+        });
+        setNotice('Новий тариф додано.');
+      }
+      setTariffModal(null);
+      setRevision(v => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err, 'Не вдалося зберегти тариф.'));
+    } finally {
+      setBusy(false);
+    }
+  }
   const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -585,29 +581,29 @@ setBusy(false);
       setBusy(false);
     }
   }
-const listLength =
-tab === 'bookings'
-? filteredBookings.length
-: tab === 'subscriptions'
-? filteredSubscriptions.length
-: tab === 'payments'
-? filteredPayments.length
-: 0;
-const totalPages = tab === 'users' ? users?.totalPages ?? 0 : Math.ceil(listLength / pageSize);
-const visiblePage = tab === 'users' ? page : Math.min(page, Math.max(0, totalPages - 1));
-const visibleBookings = filteredBookings.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
-const visibleSubscriptions = filteredSubscriptions.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
-const visiblePayments = filteredPayments.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
-return (
-<Modal
-title="Адмін - панель"
-subtitle="ЄДИНИЙ ІНСТРУМЕНТ КЕРУВАННЯ БРОНЮВАННЯМИ, СТАТУСАМИ ТА ЗАЯВКАМИ"
-onClose={() => {
-if (!busy) onClose();
-}}
-wide
-className="admin-modal"
->
+  const listLength =
+    tab === 'bookings'
+      ? filteredBookings.length
+      : tab === 'subscriptions'
+        ? filteredSubscriptions.length
+        : tab === 'payments'
+          ? filteredPayments.length
+          : 0;
+  const totalPages = tab === 'users' ? users?.totalPages ?? 0 : Math.ceil(listLength / pageSize);
+  const visiblePage = tab === 'users' ? page : Math.min(page, Math.max(0, totalPages - 1));
+  const visibleBookings = filteredBookings.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
+  const visibleSubscriptions = filteredSubscriptions.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
+  const visiblePayments = filteredPayments.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
+  return (
+    <Modal
+      title="Адмін - панель"
+      subtitle="ЄДИНИЙ ІНСТРУМЕНТ КЕРУВАННЯ БРОНЮВАННЯМИ, СТАТУСАМИ ТА ЗАЯВКАМИ"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      wide
+      className="admin-modal"
+    >
       <div className="admin-nav-pills">
         <button className={tab === 'users' ? 'btn' : 'btn outline'} disabled={busy} onClick={() => changeTab('users')}>
           Всі користувачі
@@ -780,31 +776,31 @@ className="admin-modal"
       {error && !canConfirm && !extendSub && !workspaceModal && !tariffModal && <Alert>{error}</Alert>}
       {notice && <Alert success>{notice}</Alert>}
 
-            {canConfirm && confirm && (
-              <Modal
-                title="Підтвердження дії"
-                onClose={() => {
-                  if (!busy) setConfirm(null);
-                }}
-              >
-                <p>{confirmationText(confirm)}</p>
-                {error && <Alert>{error}</Alert>}
-                <div className="actions align-right" style={{ marginTop: 24 }}>
-                  <button
-                    type="button"
-                    ref={backButton}
-                    className="btn outline small"
-                    disabled={busy}
-                    onClick={() => setConfirm(null)}
-                  >
-                    Скасувати
-                  </button>
-                  <button type="button" className="btn small" disabled={busy} onClick={perform}>
-                    {busy ? 'Зачекайте…' : 'Підтвердити'}
-                  </button>
-                </div>
-              </Modal>
-            )}
+      {canConfirm && confirm && (
+        <Modal
+          title="Підтвердження дії"
+          onClose={() => {
+            if (!busy) setConfirm(null);
+          }}
+        >
+          <p>{confirmationText(confirm)}</p>
+          {error && <Alert>{error}</Alert>}
+          <div className="actions align-right" style={{ marginTop: 24 }}>
+            <button
+              type="button"
+              ref={backButton}
+              className="btn outline small"
+              disabled={busy}
+              onClick={() => setConfirm(null)}
+            >
+              Скасувати
+            </button>
+            <button type="button" className="btn small" disabled={busy} onClick={perform}>
+              {busy ? 'Зачекайте…' : 'Підтвердити'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
 
       {loading ? (
@@ -913,9 +909,8 @@ className="admin-modal"
                       </td>
                       <td>
                         <span
-                          className={`status ${
-                            status === 'CONFIRMED' ? 'active' : status === 'CANCELLED' ? 'cancelled' : 'completed'
-                          }`}
+                          className={`status ${status === 'CONFIRMED' ? 'active' : status === 'CANCELLED' ? 'cancelled' : 'completed'
+                            }`}
                         >
                           {statusText(status)}
                         </span>
@@ -957,35 +952,35 @@ className="admin-modal"
                           </div>
                         )}
                       </td>
-                                            <td>
-                                              {payment?.status === 'REFUND_PENDING' ? (
-                                                <button
-                                                  type="button"
-                                                  className="text-button danger"
-                                                  disabled={busy}
-                                                  onClick={() =>
-                                                    ask({
-                                                      type: 'refund',
-                                                      label: `бронювання №${booking.id}`,
-                                                      payment,
-                                                    })
-                                                  }
-                                                >
-                                                  Підтвердити повернення
-                                                </button>
-                                              ) : canCancelBooking(booking, now) ? (
-                                                <button
-                                                  type="button"
-                                                  className="text-button danger"
-                                                  disabled={busy}
-                                                  onClick={() => ask({ type: 'cancel', booking })}
-                                                >
-                                                  Скасувати
-                                                </button>
-                                              ) : (
-                                                <span className="muted">—</span>
-                                              )}
-                                            </td>
+                      <td>
+                        {payment?.status === 'REFUND_PENDING' ? (
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            disabled={busy}
+                            onClick={() =>
+                              ask({
+                                type: 'refund',
+                                label: `бронювання №${booking.id}`,
+                                payment,
+                              })
+                            }
+                          >
+                            Підтвердити повернення
+                          </button>
+                        ) : canCancelBooking(booking, now) ? (
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            disabled={busy}
+                            onClick={() => ask({ type: 'cancel', booking })}
+                          >
+                            Скасувати
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
 
                     </tr>
                   );
@@ -1034,13 +1029,12 @@ className="admin-modal"
                       </td>
                       <td>
                         <span
-                          className={`status ${
-                            item.status === 'ACTIVE'
+                          className={`status ${item.status === 'ACTIVE'
                               ? 'active'
                               : item.status === 'CANCELLED'
                                 ? 'cancelled'
                                 : 'completed'
-                          }`}
+                            }`}
                         >
                           {statusText(item.status)}
                         </span>
@@ -1096,35 +1090,35 @@ className="admin-modal"
                           )}
                         </div>
                       </td>
-                                            <td>
-                                              {payment?.status === 'REFUND_PENDING' ? (
-                                                <button
-                                                  type="button"
-                                                  className="text-button danger"
-                                                  disabled={busy}
-                                                  onClick={() =>
-                                                    ask({
-                                                      type: 'refund',
-                                                      label: `абонемент №${item.id}`,
-                                                      payment,
-                                                    })
-                                                  }
-                                                >
-                                                  Підтвердити повернення
-                                                </button>
-                                              ) : canAdminCancelSubscription(item) ? (
-                                                <button
-                                                  type="button"
-                                                  className="text-button danger"
-                                                  disabled={busy}
-                                                  onClick={() => ask({ type: 'cancelSubscription', subscription: item })}
-                                                >
-                                                  Скасувати
-                                                </button>
-                                              ) : (
-                                                <span className="muted">—</span>
-                                              )}
-                                            </td>
+                      <td>
+                        {payment?.status === 'REFUND_PENDING' ? (
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            disabled={busy}
+                            onClick={() =>
+                              ask({
+                                type: 'refund',
+                                label: `абонемент №${item.id}`,
+                                payment,
+                              })
+                            }
+                          >
+                            Підтвердити повернення
+                          </button>
+                        ) : canAdminCancelSubscription(item) ? (
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            disabled={busy}
+                            onClick={() => ask({ type: 'cancelSubscription', subscription: item })}
+                          >
+                            Скасувати
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
 
                     </tr>
                   );
@@ -1173,13 +1167,12 @@ className="admin-modal"
                       </td>
                       <td>
                         <span
-                          className={`status ${
-                            payment.status === 'PAID'
+                          className={`status ${payment.status === 'PAID'
                               ? 'active'
                               : payment.status === 'UNPAID' || payment.status === 'REFUND_PENDING'
                                 ? 'pending'
                                 : 'completed'
-                          }`}
+                            }`}
                         >
                           {statusText(payment.status)}
                         </span>
@@ -1370,71 +1363,71 @@ className="admin-modal"
             </button>
           </div>
         </div>
-            ) : tab === 'gallery' ? (
-              <div className="admin-gallery">
-                <form className="closed-day-form" onSubmit={handleGalleryUpload}>
-                  <label className="closed-day-label">
-                    Додати фото до галереї (JPG, PNG або WebP, до 5 МБ)
-                    <div className="closed-day-row">
-                      <select
-                        value={galleryCategory}
-                        disabled={busy}
-                        onChange={e => setGalleryCategory(e.target.value)}
-                      >
-                        <option value="Переговорна кімната">Переговорна кімната</option>
-                        <option value="Кімната коворкінгу">Кімната коворкінгу</option>
-                        <option value="Кухня">Кухня</option>
-                        <option value="Зони відпочинку">Зони відпочинку</option>
-                      </select>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        required
-                        disabled={busy}
-                        onChange={e => handleGalleryFileChange(e.target.files?.[0] ?? null)}
-                      />
-                      <button type="submit" className="btn small" disabled={busy || !galleryFile}>
-                        {busy ? 'Завантаження…' : 'Завантажити +'}
-                      </button>
-                    </div>
-                  </label>
-                </form>
-
-                {galleryImages.length ? (
-                  <div className="admin-tariffs-grid">
-                    {galleryImages.map(img => (
-                      <article className="pricing-card admin-tariff-card" key={img.id}>
-                        <div style={{ aspectRatio: '16 / 10', borderRadius: 12, overflow: 'hidden', marginBottom: 12, background: '#eee' }}>
-                          <img
-                            src={galleryImageUrl(img)}
-                            alt={img.caption || `Фото №${img.id}`}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            loading="lazy"
-                          />
-                        </div>
-                        <strong>{img.caption || 'Без категорії'}</strong>
-                        <small className="muted" style={{ marginBottom: 12 }}>
-                          {(img.sizeBytes / (1024 * 1024)).toFixed(2)} МБ · {img.contentType.replace('image/', '').toUpperCase()}
-                        </small>
-                        <div className="admin-tariff-actions">
-                          <button
-                            type="button"
-                            className="text-button danger"
-                            disabled={busy}
-                            onClick={() => ask({ type: 'deleteGalleryImage', image: img })}
-                          >
-                            Видалити
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty">Завантажених фото поки немає (відображаються стандартні фото сайту).</p>
-                )}
+      ) : tab === 'gallery' ? (
+        <div className="admin-gallery">
+          <form className="closed-day-form" onSubmit={handleGalleryUpload}>
+            <label className="closed-day-label">
+              Додати фото до галереї (JPG, PNG або WebP, до 5 МБ)
+              <div className="closed-day-row">
+                <select
+                  value={galleryCategory}
+                  disabled={busy}
+                  onChange={e => setGalleryCategory(e.target.value)}
+                >
+                  <option value="Переговорна кімната">Переговорна кімната</option>
+                  <option value="Кімната коворкінгу">Кімната коворкінгу</option>
+                  <option value="Кухня">Кухня</option>
+                  <option value="Зони відпочинку">Зони відпочинку</option>
+                </select>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  required
+                  disabled={busy}
+                  onChange={e => handleGalleryFileChange(e.target.files?.[0] ?? null)}
+                />
+                <button type="submit" className="btn small" disabled={busy || !galleryFile}>
+                  {busy ? 'Завантаження…' : 'Завантажити +'}
+                </button>
               </div>
-            ) : (
+            </label>
+          </form>
+
+          {galleryImages.length ? (
+            <div className="admin-tariffs-grid">
+              {galleryImages.map(img => (
+                <article className="pricing-card admin-tariff-card" key={img.id}>
+                  <div style={{ aspectRatio: '16 / 10', borderRadius: 12, overflow: 'hidden', marginBottom: 12, background: '#eee' }}>
+                    <img
+                      src={galleryImageUrl(img)}
+                      alt={img.caption || `Фото №${img.id}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      loading="lazy"
+                    />
+                  </div>
+                  <strong>{img.caption || 'Без категорії'}</strong>
+                  <small className="muted" style={{ marginBottom: 12 }}>
+                    {(img.sizeBytes / (1024 * 1024)).toFixed(2)} МБ · {img.contentType.replace('image/', '').toUpperCase()}
+                  </small>
+                  <div className="admin-tariff-actions">
+                    <button
+                      type="button"
+                      className="text-button danger"
+                      disabled={busy}
+                      onClick={() => ask({ type: 'deleteGalleryImage', image: img })}
+                    >
+                      Видалити
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="empty">Завантажених фото поки немає (відображаються стандартні фото сайту).</p>
+          )}
+        </div>
+      ) : (
         <div>
           <div className="admin-tariffs-grid">
             {tariffs.map(tariff => {
@@ -1497,7 +1490,7 @@ className="admin-modal"
         />
       )}
 
-{/* Вкладена модалка: Продовжити термін абонементу */}
+      {/* Вкладена модалка: Продовжити термін абонементу */}
       {extendSub && (
         <Modal title="Продовжити термін абонементу" onClose={() => !busy && setExtendSub(null)}>
           <p className="muted">
@@ -1538,13 +1531,13 @@ className="admin-modal"
           </form>
         </Modal>
       )}
-{/* Вкладена модалка: Редагувати / Додати робоче місце */}
+      {/* Вкладена модалка: Редагувати / Додати робоче місце */}
       {workspaceModal && (
         <Modal
           title={workspaceModal.mode === 'edit' ? 'Редагувати робоче місце' : 'Додати робоче місце'}
           onClose={() => !busy && setWorkspaceModal(null)}
         >
-        {error && <Alert>{error}</Alert>}
+          {error && <Alert>{error}</Alert>}
           <form className="form" onSubmit={handleWorkspaceSubmit}>
             <label>
               Назва місця
@@ -1581,13 +1574,13 @@ className="admin-modal"
         </Modal>
       )}
 
-{/* Вкладена модалка: Створити / Редагувати тариф */}
+      {/* Вкладена модалка: Створити / Редагувати тариф */}
       {tariffModal && (
         <Modal
           title={tariffModal.mode === 'edit' ? 'Редагувати тариф' : 'Створити тариф'}
           onClose={() => !busy && setTariffModal(null)}
         >
-        {error && <Alert>{error}</Alert>}
+          {error && <Alert>{error}</Alert>}
           <form className="form" onSubmit={handleTariffSubmit}>
             <label>
               Категорія (бейдж)
