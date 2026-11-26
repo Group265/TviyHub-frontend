@@ -192,6 +192,31 @@ export default function App() {
   });
   return <>
     <a className="skip" href="#main">Перейти до вмісту</a>
+        <div className="top-contacts">
+      <div className="container top-contacts-inner">
+        <a href="https://t.me" target="_blank" rel="noreferrer" aria-label="Telegram">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 5 2 12.5l7 1M21 5l-2.5 15L9 13.5M21 5 9 13.5m0 0V19l3.25-3.22" />
+          </svg>
+          @tviy_hub
+        </a>
+        <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+            <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+          </svg>
+          @tviy.hub
+        </a>
+        <a href="https://threads.net" target="_blank" rel="noreferrer" aria-label="Threads">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12a7 7 0 1 0-7 7c4.5 0 7-2.5 7-6.5 0-3.5-2.5-6-6.5-6-3.8 0-6.5 2.6-6.5 6.2 0 3.2 2.2 5.3 5 5.3 2.3 0 4-1.4 4-3.5 0-1.8-1.2-3-2.8-3-1.5 0-2.7 1.1-2.7 2.5s1.1 2.4 2.5 2.4c1.7 0 2.8-1.2 2.8-3.2V9.5" />
+          </svg>
+          @tviy.hub
+        </a>
+      </div>
+    </div>
+
     <header className="container header" id="home"><Logo /><button className="mobile-menu btn outline small" aria-label="Відкрити меню" aria-expanded={mobileNav} onClick={() => setMobileNav(v => !v)}>Меню</button><nav className={mobileNav ? 'expanded' : ''} aria-label="Головна навігація">{navLinks}</nav><div className="header-actions">{user?.role === 'ADMIN' && <button className="btn outline small" onClick={() => setAdmin(true)}>Адмін-панель</button>}<button className="btn outline small" disabled={authLoading} onClick={() => user ? setProfile(true) : setAuthOpen(true)}>{authLoading ? 'Зачекайте…' : user ? 'Мій профіль' : 'Увійти'}</button></div></header>
     <main id="main" className="container">
       {sessionError && <Alert>{sessionError}</Alert>}
