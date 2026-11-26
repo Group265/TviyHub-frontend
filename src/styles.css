@@ -308,6 +308,7 @@
 
 .spaces-gallery {
   display: grid;
+  grid-template-columns: none;
   grid-auto-flow: column;
   grid-auto-columns: calc((100% - 72px) / 4);
   gap: 24px;
