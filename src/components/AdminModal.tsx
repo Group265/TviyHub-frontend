@@ -1198,19 +1198,19 @@ export function AdminModal({
                             Підтвердити повернення
                           </button>
                         )}
-                        {payment.status === 'UNPAID' && (
-                          <div className="actions">
+                                               {payment.status === 'UNPAID' && (
+                          <div className="actions admin-payment-actions">
                             <button
                               type="button"
-                              className="text-button text-green"
+                              className="btn outline small pay-choice-btn"
                               disabled={busy}
                               onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CARD' })}
                             >
-                              Підтвердити (картка)
+                              Картка
                             </button>
                             <button
                               type="button"
-                              className="text-button text-green"
+                              className="btn outline small pay-choice-btn"
                               disabled={busy}
                               onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CASH' })}
                             >
@@ -1218,6 +1218,7 @@ export function AdminModal({
                             </button>
                           </div>
                         )}
+
                         {payment.status === 'REFUNDED' && <span className="muted">—</span>}
                       </td>
                     </tr>

@@ -507,4 +507,18 @@
 .footer-socials svg {
   flex-shrink: 0;
 }
+.admin-modal td .admin-payment-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-top: 0;
+}
 
+.admin-modal td .pay-choice-btn {
+  padding: 5px 12px;
+  min-height: 30px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 16px;
+  white-space: nowrap;
+}
