@@ -307,7 +307,9 @@ if (!isFuture) return false;
 return false;
 }
 if (bookingPaymentFilter === 'ACTION_REQUIRED') {
-if (payStatus !== 'UNPAID' && payStatus !== 'REFUND_PENDING') return false;
+    const needsPayment = payStatus === 'UNPAID' && displayStatus !== 'CANCELLED';
+    const needsRefund = payStatus === 'REFUND_PENDING';
+    if (!needsPayment && !needsRefund) return false;
 } else if (bookingPaymentFilter !== 'ALL' && payStatus !== bookingPaymentFilter) {
 return false;
 }
@@ -319,7 +321,9 @@ return subscriptions.filter(sub => {
 const payStatus = subscriptionPayments.get(sub.id)?.status ?? sub.paymentStatus;
 if (subStatusFilter !== 'ALL' && sub.status !== subStatusFilter) return false;
 if (subPaymentFilter === 'ACTION_REQUIRED') {
-if (payStatus !== 'UNPAID' && payStatus !== 'REFUND_PENDING') return false;
+    const needsPayment = payStatus === 'UNPAID' && sub.status !== 'CANCELLED';
+    const needsRefund = payStatus === 'REFUND_PENDING';
+    if (!needsPayment && !needsRefund) return false;
 } else if (subPaymentFilter !== 'ALL' && payStatus !== subPaymentFilter) {
 return false;
 }
