@@ -895,20 +895,36 @@ className="admin-modal"
                           </div>
                         )}
                       </td>
-                      <td>
-                        {canCancelBooking(booking, now) ? (
-                          <button
-                            type="button"
-                            className="text-button danger"
-                            disabled={busy}
-                            onClick={() => ask({ type: 'cancel', booking })}
-                          >
-                            Скасувати
-                          </button>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
+                                            <td>
+                                              {payment?.status === 'REFUND_PENDING' ? (
+                                                <button
+                                                  type="button"
+                                                  className="text-button danger"
+                                                  disabled={busy}
+                                                  onClick={() =>
+                                                    ask({
+                                                      type: 'refund',
+                                                      label: `бронювання №${booking.id}`,
+                                                      payment,
+                                                    })
+                                                  }
+                                                >
+                                                  Підтвердити повернення
+                                                </button>
+                                              ) : canCancelBooking(booking, now) ? (
+                                                <button
+                                                  type="button"
+                                                  className="text-button danger"
+                                                  disabled={busy}
+                                                  onClick={() => ask({ type: 'cancel', booking })}
+                                                >
+                                                  Скасувати
+                                                </button>
+                                              ) : (
+                                                <span className="muted">—</span>
+                                              )}
+                                            </td>
+
                     </tr>
                   );
                 })}
@@ -1018,20 +1034,36 @@ className="admin-modal"
                           )}
                         </div>
                       </td>
-                      <td>
-                        {canAdminCancelSubscription(item) ? (
-                          <button
-                            type="button"
-                            className="text-button danger"
-                            disabled={busy}
-                            onClick={() => ask({ type: 'cancelSubscription', subscription: item })}
-                          >
-                            Скасувати
-                          </button>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
+                                            <td>
+                                              {payment?.status === 'REFUND_PENDING' ? (
+                                                <button
+                                                  type="button"
+                                                  className="text-button danger"
+                                                  disabled={busy}
+                                                  onClick={() =>
+                                                    ask({
+                                                      type: 'refund',
+                                                      label: `абонемент №${item.id}`,
+                                                      payment,
+                                                    })
+                                                  }
+                                                >
+                                                  Підтвердити повернення
+                                                </button>
+                                              ) : canAdminCancelSubscription(item) ? (
+                                                <button
+                                                  type="button"
+                                                  className="text-button danger"
+                                                  disabled={busy}
+                                                  onClick={() => ask({ type: 'cancelSubscription', subscription: item })}
+                                                >
+                                                  Скасувати
+                                                </button>
+                                              ) : (
+                                                <span className="muted">—</span>
+                                              )}
+                                            </td>
+
                     </tr>
                   );
                 })}
