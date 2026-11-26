@@ -17,7 +17,7 @@ export interface Booking extends BookingPayment { id: number; userId: number; wo
 export interface HistoryItem extends BookingPayment { id: number; bookingDate: string; startTime: string | null; endTime: string | null; bookingType: BookingType; status: string; paymentStatus?: string | null; totalPrice: number; workspace: Workspace }
 export interface Page<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface Subscription { id: number; userId: number; workspaceId: number; startDate: string; endDate: string; status: string; paymentStatus: string; paymentId?: number | null }
-export interface Payment { id: number; status: string; amount: number; bookingId: number | null; subscriptionId: number | null; paymentMethod: string; createdAt?: string | null; }
+export interface Payment { id: number; status: string; amount: number; bookingId: number | null; subscriptionId: number | null; paymentMethod: string; createdAt?: string | null; refundedAt?: string | null; }
 export interface StripeSession { sessionUrl: string; sessionId: string }
 export interface StripeBatchSession { url: string; sessionId?: string }
 export type InPersonPaymentMethod = 'CASH' | 'CARD';
