@@ -362,7 +362,36 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       </div> : <p className="empty">{scope === 'upcoming' ? 'Майбутніх бронювань немає.' : 'У цьому розділі немає бронювань.'}</p>}
       <Pager page={visiblePage} total={totalPages} change={setPage}/>
     </>}
-    {canConfirmCancel&&<div className="confirm-panel"><p>Скасувати бронювання №{confirmCancel.id}?</p><div className="actions"><button className="btn small" disabled={busy} onClick={()=>cancel(confirmCancel)}>Так, скасувати</button><button className="btn outline small" onClick={()=>setConfirmCancel(null)}>Залишити</button></div></div>}
+       {canConfirmCancel && confirmCancel && (
+         <Modal
+           title="Скасування бронювання"
+           onClose={() => {
+             if (!busy) setConfirmCancel(null);
+           }}
+         >
+           <p>Скасувати бронювання №{confirmCancel.id}?</p>
+           {cancelError && <Alert>{cancelError}</Alert>}
+           <div className="actions align-right" style={{ marginTop: 24 }}>
+             <button
+               type="button"
+               className="btn outline small"
+               disabled={busy}
+               onClick={() => setConfirmCancel(null)}
+             >
+               Залишити
+             </button>
+             <button
+               type="button"
+               className="btn small"
+               disabled={busy}
+               onClick={() => cancel(confirmCancel)}
+             >
+               {busy ? 'Зачекайте…' : 'Так, скасувати'}
+             </button>
+           </div>
+         </Modal>
+       )}
+
         {subscriptionError && <Alert>{subscriptionError}</Alert>}
     {subCancelError && <Alert>{subCancelError}</Alert>}
     {subCancelNotice && <Alert success>{subCancelNotice}</Alert>}
@@ -382,7 +411,35 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
         </table>
       </div>
     </>}
-    {canConfirmCancelSub && <div className="confirm-panel"><p>Скасувати абонемент №{confirmCancelSub.id}?</p><div className="actions"><button className="btn small" disabled={busy} onClick={() => cancelSubscription(confirmCancelSub)}>Так, скасувати</button><button className="btn outline small" onClick={() => setConfirmCancelSub(null)}>Залишити</button></div></div>}
+        {canConfirmCancelSub && confirmCancelSub && (
+          <Modal
+            title="Скасування абонементу"
+            onClose={() => {
+              if (!busy) setConfirmCancelSub(null);
+            }}
+          >
+            <p>Скасувати абонемент №{confirmCancelSub.id}?</p>
+            {subCancelError && <Alert>{subCancelError}</Alert>}
+            <div className="actions align-right" style={{ marginTop: 24 }}>
+              <button
+                type="button"
+                className="btn outline small"
+                disabled={busy}
+                onClick={() => setConfirmCancelSub(null)}
+              >
+                Залишити
+              </button>
+              <button
+                type="button"
+                className="btn small"
+                disabled={busy}
+                onClick={() => cancelSubscription(confirmCancelSub)}
+              >
+                {busy ? 'Зачекайте…' : 'Так, скасувати'}
+              </button>
+            </div>
+          </Modal>
+        )}
     <p className="muted small-copy">Погодинну бронь можна скасувати щонайменше за 2 години, денну та абонемент — за добу.</p>
     </>;
   return standalone ? content : <Modal title="Мій профіль" onClose={() => { if (!busy) onClose(); }} wide>{content}</Modal>;
