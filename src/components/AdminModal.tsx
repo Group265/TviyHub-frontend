@@ -711,28 +711,35 @@ className="admin-modal"
         </div>
       )}
 
-      {error && !extendSub && !workspaceModal && !tariffModal && <Alert>{error}</Alert>}
+      {error && !canConfirm && !extendSub && !workspaceModal && !tariffModal && <Alert>{error}</Alert>}
       {notice && <Alert success>{notice}</Alert>}
 
-      {canConfirm && (
-        <div className="confirm-panel">
-          <p>{confirmationText(confirm)}</p>
-          <div className="actions">
-            <button type="button" className="btn small" disabled={busy} onClick={perform}>
-              {busy ? 'Зачекайте…' : 'Підтвердити'}
-            </button>
-            <button
-              type="button"
-              ref={backButton}
-              className="btn outline small"
-              disabled={busy}
-              onClick={() => setConfirm(null)}
-            >
-              Скасувати
-            </button>
-          </div>
-        </div>
-      )}
+            {canConfirm && confirm && (
+              <Modal
+                title="Підтвердження дії"
+                onClose={() => {
+                  if (!busy) setConfirm(null);
+                }}
+              >
+                <p>{confirmationText(confirm)}</p>
+                {error && <Alert>{error}</Alert>}
+                <div className="actions align-right" style={{ marginTop: 24 }}>
+                  <button
+                    type="button"
+                    ref={backButton}
+                    className="btn outline small"
+                    disabled={busy}
+                    onClick={() => setConfirm(null)}
+                  >
+                    Скасувати
+                  </button>
+                  <button type="button" className="btn small" disabled={busy} onClick={perform}>
+                    {busy ? 'Зачекайте…' : 'Підтвердити'}
+                  </button>
+                </div>
+              </Modal>
+            )}
+
 
       {loading ? (
         <p className="empty" role="status">
