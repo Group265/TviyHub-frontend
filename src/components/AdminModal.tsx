@@ -1200,7 +1200,7 @@ export function AdminModal({
                         )}
                         {payment.status === 'UNPAID' && (
                           <div className="pay-choice-group">
-                            <span className="pay-choice-label">Сплатити:</span>
+                            <span className="pay-choice-label">Сплатити</span>
                             <div className="pay-choice-links">
                               <button
                                 type="button"
