@@ -356,65 +356,89 @@ export function AdminModal({
       return true;
     });
   }, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter]);
-    const paymentDateIso = (p: Payment): string => {
-      const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
-      const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
-      return (p.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '').slice(0, 10);
-    };
-
-    const availablePaymentMonths = useMemo(() => {
-      const set = new Set<string>();
-      for (const p of payments) {
-        const ym = paymentDateIso(p).slice(0, 7);
-        if (/^\d{4}-\d{2}$/.test(ym)) set.add(ym);
-      }
-      return Array.from(set).sort((a, b) => b.localeCompare(a));
-    }, [payments, bookingsById, subscriptionsById]);
-
-    const paymentsInMonth = useMemo(() => {
-      if (paymentMonthFilter === 'ALL') return payments;
-      return payments.filter(p => paymentDateIso(p).startsWith(paymentMonthFilter));
-    }, [payments, paymentMonthFilter, bookingsById, subscriptionsById]);
-
-    const paymentSummary = useMemo(() => {
-      let paidTotal = 0;
-      let paidCount = 0;
-      let cardTotal = 0;
-      let cardCount = 0;
-      let cashTotal = 0;
-      let cashCount = 0;
-      let refundedTotal = 0;
-      let refundedCount = 0;
-
-      for (const p of paymentsInMonth) {
-        if (p.status === 'PAID') {
-          paidTotal += p.amount;
-          paidCount++;
-          if (p.paymentMethod === 'CASH') {
-            cashTotal += p.amount;
-            cashCount++;
-          } else {
-            cardTotal += p.amount;
-            cardCount++;
+        const paymentDateIso = (p: Payment): string => {
+          const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
+          const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
+          if (p.status === 'REFUNDED' && p.refundedAt) {
+            return p.refundedAt.slice(0, 10);
           }
-        } else if (p.status === 'REFUNDED') {
-          refundedTotal += p.amount;
-          refundedCount++;
-        }
-      }
+          if (p.paidAt) {
+            return p.paidAt.slice(0, 10);
+          }
+          return (p.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '').slice(0, 10);
+        };
 
-      return {
-        paidTotal,
-        paidCount,
-        cardTotal,
-        cardCount,
-        cashTotal,
-        cashCount,
-        refundedTotal,
-        refundedCount,
-        netTotal: paidTotal - refundedTotal,
-      };
-    }, [paymentsInMonth]);
+        const availablePaymentMonths = useMemo(() => {
+          const set = new Set<string>();
+          for (const p of payments) {
+            const ym = paymentDateIso(p).slice(0, 7);
+            if (/^\d{4}-\d{2}$/.test(ym)) set.add(ym);
+            if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
+              set.add(p.paidAt.slice(0, 7));
+            }
+            if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
+              set.add(p.refundedAt.slice(0, 7));
+            }
+          }
+          return Array.from(set).sort((a, b) => b.localeCompare(a));
+        }, [payments, bookingsById, subscriptionsById]);
+
+        const paymentsInMonth = useMemo(() => {
+          if (paymentMonthFilter === 'ALL') return payments;
+          return payments.filter(p => paymentDateIso(p).startsWith(paymentMonthFilter));
+        }, [payments, paymentMonthFilter, bookingsById, subscriptionsById]);
+
+        const paymentSummary = useMemo(() => {
+          let paidTotal = 0;
+          let paidCount = 0;
+          let cardTotal = 0;
+          let cardCount = 0;
+          let cashTotal = 0;
+          let cashCount = 0;
+          let refundedTotal = 0;
+          let refundedCount = 0;
+
+          for (const p of payments) {
+            const isPaidState = p.status === 'PAID' || p.status === 'REFUND_PENDING' || p.status === 'REFUNDED';
+            if (isPaidState && p.paidAt) {
+              const paidMatchesMonth =
+                paymentMonthFilter === 'ALL' || p.paidAt.startsWith(paymentMonthFilter);
+              if (paidMatchesMonth) {
+                paidTotal += p.amount;
+                paidCount++;
+                if (p.paymentMethod === 'CASH') {
+                  cashTotal += p.amount;
+                  cashCount++;
+                } else {
+                  cardTotal += p.amount;
+                  cardCount++;
+                }
+              }
+            }
+
+            if (p.status === 'REFUNDED') {
+              const refundIso = p.refundedAt ?? p.paidAt ?? paymentDateIso(p);
+              const refundMatchesMonth =
+                paymentMonthFilter === 'ALL' || refundIso.startsWith(paymentMonthFilter);
+              if (refundMatchesMonth) {
+                refundedTotal += p.amount;
+                refundedCount++;
+              }
+            }
+          }
+
+          return {
+            paidTotal,
+            paidCount,
+            cardTotal,
+            cardCount,
+            cashTotal,
+            cashCount,
+            refundedTotal,
+            refundedCount,
+            netTotal: paidTotal - refundedTotal,
+          };
+        }, [payments, paymentMonthFilter, bookingsById, subscriptionsById]);
 
     const filteredPayments = useMemo(() => {
       return paymentsInMonth.filter(p => {
@@ -1278,7 +1302,7 @@ export function AdminModal({
                     : sub
                       ? `Абонемент №${sub.id}`
                       : `Платіж №${payment.id}`;
-                  const dateLabel = (payment.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '—').slice(0, 10);
+                  const dateLabel = paymentDateIso(payment) || '—';
 
                   return (
                     <tr key={payment.id}>
