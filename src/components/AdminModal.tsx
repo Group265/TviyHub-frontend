@@ -61,6 +61,24 @@ function paymentMethodLabel(method?: string | null): string {
   if (method === 'CASH') return 'ГОТІВКА';
   return method || 'КАРТКА';
 }
+const MONTH_NAMES_UK: Record<string, string> = {
+  '01': 'Січень',
+  '02': 'Лютий',
+  '03': 'Березень',
+  '04': 'Квітень',
+  '05': 'Травень',
+  '06': 'Червень',
+  '07': 'Липень',
+  '08': 'Серпень',
+  '09': 'Вересень',
+  '10': 'Жовтень',
+  '11': 'Листопад',
+  '12': 'Грудень',
+};
+function formatMonthLabel(ym: string): string {
+  const [year, month] = ym.split('-');
+  return `${MONTH_NAMES_UK[month] ?? month} ${year}`;
+}
 
 function tariffMeta(tariff: Tariff) {
   const isRoom = tariff.workspaceType === 'MEETING_ROOM';
@@ -129,7 +147,7 @@ export function AdminModal({
   const [subStatusFilter, setSubStatusFilter] = useState<string>('ALL');
   const [subPaymentFilter, setSubPaymentFilter] = useState<string>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
-
+  const [paymentMonthFilter, setPaymentMonthFilter] = useState<string>('ALL');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -338,14 +356,75 @@ export function AdminModal({
       return true;
     });
   }, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter]);
-  const filteredPayments = useMemo(() => {
-    return payments.filter(p => {
-      if (paymentFilter === 'ACTION_REQUIRED') {
-        return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
+    const paymentDateIso = (p: Payment): string => {
+      const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
+      const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
+      return (p.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '').slice(0, 10);
+    };
+
+    const availablePaymentMonths = useMemo(() => {
+      const set = new Set<string>();
+      for (const p of payments) {
+        const ym = paymentDateIso(p).slice(0, 7);
+        if (/^\d{4}-\d{2}$/.test(ym)) set.add(ym);
       }
-      return paymentFilter === 'ALL' || p.status === paymentFilter;
-    });
-  }, [payments, paymentFilter]);
+      return Array.from(set).sort((a, b) => b.localeCompare(a));
+    }, [payments, bookingsById, subscriptionsById]);
+
+    const paymentsInMonth = useMemo(() => {
+      if (paymentMonthFilter === 'ALL') return payments;
+      return payments.filter(p => paymentDateIso(p).startsWith(paymentMonthFilter));
+    }, [payments, paymentMonthFilter, bookingsById, subscriptionsById]);
+
+    const paymentSummary = useMemo(() => {
+      let paidTotal = 0;
+      let paidCount = 0;
+      let cardTotal = 0;
+      let cardCount = 0;
+      let cashTotal = 0;
+      let cashCount = 0;
+      let refundedTotal = 0;
+      let refundedCount = 0;
+
+      for (const p of paymentsInMonth) {
+        if (p.status === 'PAID') {
+          paidTotal += p.amount;
+          paidCount++;
+          if (p.paymentMethod === 'CASH') {
+            cashTotal += p.amount;
+            cashCount++;
+          } else {
+            cardTotal += p.amount;
+            cardCount++;
+          }
+        } else if (p.status === 'REFUNDED') {
+          refundedTotal += p.amount;
+          refundedCount++;
+        }
+      }
+
+      return {
+        paidTotal,
+        paidCount,
+        cardTotal,
+        cardCount,
+        cashTotal,
+        cashCount,
+        refundedTotal,
+        refundedCount,
+        netTotal: paidTotal - refundedTotal,
+      };
+    }, [paymentsInMonth]);
+
+    const filteredPayments = useMemo(() => {
+      return paymentsInMonth.filter(p => {
+        if (paymentFilter === 'ACTION_REQUIRED') {
+          return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
+        }
+        return paymentFilter === 'ALL' || p.status === paymentFilter;
+      });
+    }, [paymentsInMonth, paymentFilter]);
+
   function changeTab(next: Tab) {
     setTab(next);
     setPage(0);
@@ -354,6 +433,7 @@ export function AdminModal({
     setSubStatusFilter('ALL');
     setSubPaymentFilter('ALL');
     setPaymentFilter('ALL');
+    setPaymentMonthFilter('ALL');
     setError('');
     setNotice('');
     setConfirm(null);
@@ -738,40 +818,84 @@ export function AdminModal({
         </div>
       )}
 
-      {!loading && !loadError && tab === 'payments' && (
-        <div className="admin-filters">
-          <label>
-            Фільтр за статусом платежу
-            <select
-              value={paymentFilter}
-              onChange={e => {
-                setPaymentFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="ALL">Всі платежі</option>
-              <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
-              <option value="PAID">Сплачено</option>
-              <option value="UNPAID">Не сплачено</option>
-              <option value="REFUND_PENDING">Очікує повернення</option>
-              <option value="REFUNDED">Повернено</option>
-            </select>
-          </label>
+            {!loading && !loadError && tab === 'payments' && (
+              <>
+                <div className="payment-summary-grid">
+                  <div className="payment-summary-card accent">
+                    <span>Чистий дохід</span>
+                    <strong>{money(paymentSummary.netTotal)}</strong>
+                    <small>Сплачено {money(paymentSummary.paidTotal)} ({paymentSummary.paidCount} шт.)</small>
+                  </div>
+                  <div className="payment-summary-card">
+                    <span>Безготівка (Картка)</span>
+                    <strong>{money(paymentSummary.cardTotal)}</strong>
+                    <small>{paymentSummary.cardCount} оплат карткою / Stripe</small>
+                  </div>
+                  <div className="payment-summary-card">
+                    <span>Готівка</span>
+                    <strong>{money(paymentSummary.cashTotal)}</strong>
+                    <small>{paymentSummary.cashCount} оплат готівкою</small>
+                  </div>
+                  <div className="payment-summary-card">
+                    <span>Повернення</span>
+                    <strong>{money(paymentSummary.refundedTotal)}</strong>
+                    <small>{paymentSummary.refundedCount} повернених платежів</small>
+                  </div>
+                </div>
 
-          {paymentFilter !== 'ALL' && (
-            <button
-              type="button"
-              className="text-button muted-link reset-filters-btn"
-              onClick={() => {
-                setPaymentFilter('ALL');
-                setPage(0);
-              }}
-            >
-              Скинути фільтр
-            </button>
-          )}
-        </div>
-      )}
+                <div className="admin-filters">
+                  <label>
+                    Період (місяць)
+                    <select
+                      value={paymentMonthFilter}
+                      onChange={e => {
+                        setPaymentMonthFilter(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      <option value="ALL">За весь час</option>
+                      {availablePaymentMonths.map(ym => (
+                        <option key={ym} value={ym}>
+                          {formatMonthLabel(ym)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Фільтр за статусом платежу
+                    <select
+                      value={paymentFilter}
+                      onChange={e => {
+                        setPaymentFilter(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      <option value="ALL">Всі платежі</option>
+                      <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
+                      <option value="PAID">Сплачено</option>
+                      <option value="UNPAID">Не сплачено</option>
+                      <option value="REFUND_PENDING">Очікує повернення</option>
+                      <option value="REFUNDED">Повернено</option>
+                    </select>
+                  </label>
+
+                  {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'ALL') && (
+                    <button
+                      type="button"
+                      className="text-button muted-link reset-filters-btn"
+                      onClick={() => {
+                        setPaymentFilter('ALL');
+                        setPaymentMonthFilter('ALL');
+                        setPage(0);
+                      }}
+                    >
+                      Скинути фільтри
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
 
       {error && !canConfirm && !extendSub && !workspaceModal && !tariffModal && <Alert>{error}</Alert>}
       {notice && <Alert success>{notice}</Alert>}
