@@ -369,19 +369,17 @@ export function AdminModal({
         };
 
         const availablePaymentMonths = useMemo(() => {
-          const set = new Set<string>();
-          for (const p of payments) {
-            const ym = paymentDateIso(p).slice(0, 7);
-            if (/^\d{4}-\d{2}$/.test(ym)) set.add(ym);
-            if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
-              set.add(p.paidAt.slice(0, 7));
-            }
-            if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
-              set.add(p.refundedAt.slice(0, 7));
-            }
-          }
-          return Array.from(set).sort((a, b) => b.localeCompare(a));
-        }, [payments, bookingsById, subscriptionsById]);
+              const set = new Set<string>();
+              for (const p of payments) {
+                if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
+                  set.add(p.paidAt.slice(0, 7));
+                }
+                if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
+                  set.add(p.refundedAt.slice(0, 7));
+                }
+              }
+              return Array.from(set).sort((a, b) => b.localeCompare(a));
+            }, [payments]);
 
         const paymentsInMonth = useMemo(() => {
           if (paymentMonthFilter === 'ALL') return payments;
