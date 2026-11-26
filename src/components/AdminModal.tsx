@@ -1198,27 +1198,30 @@ export function AdminModal({
                             Підтвердити повернення
                           </button>
                         )}
-                                               {payment.status === 'UNPAID' && (
-                          <div className="actions admin-payment-actions">
-                            <button
-                              type="button"
-                              className="btn outline small pay-choice-btn"
-                              disabled={busy}
-                              onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CARD' })}
-                            >
-                              Картка
-                            </button>
-                            <button
-                              type="button"
-                              className="btn outline small pay-choice-btn"
-                              disabled={busy}
-                              onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CASH' })}
-                            >
-                              Готівка
-                            </button>
+                        {payment.status === 'UNPAID' && (
+                          <div className="pay-choice-group">
+                            <span className="pay-choice-label">Сплатити:</span>
+                            <div className="pay-choice-links">
+                              <button
+                                type="button"
+                                className="text-button"
+                                disabled={busy}
+                                onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CASH' })}
+                              >
+                                Готівка
+                              </button>
+                              <span className="pay-choice-sep">/</span>
+                              <button
+                                type="button"
+                                className="text-button"
+                                disabled={busy}
+                                onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CARD' })}
+                              >
+                                Картка
+                              </button>
+                            </div>
                           </div>
                         )}
-
                         {payment.status === 'REFUNDED' && <span className="muted">—</span>}
                       </td>
                     </tr>
