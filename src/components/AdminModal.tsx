@@ -742,62 +742,57 @@ export function AdminModal({
         </button>
       </div>
 
-      {!loading && !loadError && tab === 'bookings' && (
-                        <div className="admin-filters">
-                  <label>
-                    Період звіту
-                    <select
-                      value={paymentMonthFilter}
-                      onChange={e => {
-                        setPaymentMonthFilter(e.target.value);
-                        setPage(0);
-                      }}
-                    >
-                      <option value="DAY">Поточний день ({todayIso.split('-').reverse().join('.')})</option>
-                      <option value="MONTH">Поточний місяць ({formatMonthLabel(currentMonthIso)})</option>
-                      <option value="YEAR">Поточний рік ({currentYearIso})</option>
-                      <option value="ALL">За весь час</option>
-                      {availablePaymentMonths.map(ym => (
-                        <option key={ym} value={ym}>
-                          {formatMonthLabel(ym)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+            {!loading && !loadError && tab === 'bookings' && (
+        <div className="admin-filters">
+          <label>
+            Статус бронювання
+            <select
+              value={bookingStatusFilter}
+              onChange={e => {
+                setBookingStatusFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="ALL">Всі статуси</option>
+              <option value="UPCOMING">Майбутні / активні</option>
+              <option value="CONFIRMED">Підтверджено</option>
+              <option value="COMPLETED">Завершено</option>
+              <option value="CANCELLED">Скасовано</option>
+            </select>
+          </label>
 
-                  <label>
-                    Фільтр за статусом платежу
-                    <select
-                      value={paymentFilter}
-                      onChange={e => {
-                        setPaymentFilter(e.target.value);
-                        setPage(0);
-                      }}
-                    >
-                      <option value="ALL">Всі платежі</option>
-                      <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
-                      <option value="PAID">Сплачено</option>
-                      <option value="UNPAID">Не сплачено</option>
-                      <option value="REFUND_PENDING">Очікує повернення</option>
-                      <option value="REFUNDED">Повернено</option>
-                    </select>
-                  </label>
+          <label>
+            Статус оплати
+            <select
+              value={bookingPaymentFilter}
+              onChange={e => {
+                setBookingPaymentFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="ALL">Всі оплати</option>
+              <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
+              <option value="PAID">Сплачено</option>
+              <option value="UNPAID">Не сплачено</option>
+              <option value="REFUND_PENDING">Очікує повернення</option>
+              <option value="REFUNDED">Повернено</option>
+            </select>
+          </label>
 
-                  {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'DAY') && (
-                    <button
-                      type="button"
-                      className="text-button muted-link reset-filters-btn"
-                      onClick={() => {
-                        setPaymentFilter('ALL');
-                        setPaymentMonthFilter('DAY');
-                        setPage(0);
-                      }}
-                    >
-                      Скинути фільтри
-                    </button>
-                  )}
-                </div>
-
+          {(bookingStatusFilter !== 'ALL' || bookingPaymentFilter !== 'ALL') && (
+            <button
+              type="button"
+              className="text-button muted-link reset-filters-btn"
+              onClick={() => {
+                setBookingStatusFilter('ALL');
+                setBookingPaymentFilter('ALL');
+                setPage(0);
+              }}
+            >
+              Скинути фільтри
+            </button>
+          )}
+        </div>
       )}
 
       {!loading && !loadError && tab === 'subscriptions' && (
@@ -878,9 +873,9 @@ export function AdminModal({
                   </div>
                 </div>
 
-                <div className="admin-filters">
+                                <div className="admin-filters">
                   <label>
-                    Період (місяць)
+                    Період звіту
                     <select
                       value={paymentMonthFilter}
                       onChange={e => {
@@ -888,6 +883,9 @@ export function AdminModal({
                         setPage(0);
                       }}
                     >
+                      <option value="DAY">Поточний день ({todayIso.split('-').reverse().join('.')})</option>
+                      <option value="MONTH">Поточний місяць ({formatMonthLabel(currentMonthIso)})</option>
+                      <option value="YEAR">Поточний рік ({currentYearIso})</option>
                       <option value="ALL">За весь час</option>
                       {availablePaymentMonths.map(ym => (
                         <option key={ym} value={ym}>
@@ -915,13 +913,13 @@ export function AdminModal({
                     </select>
                   </label>
 
-                  {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'ALL') && (
+                  {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'DAY') && (
                     <button
                       type="button"
                       className="text-button muted-link reset-filters-btn"
                       onClick={() => {
                         setPaymentFilter('ALL');
-                        setPaymentMonthFilter('ALL');
+                        setPaymentMonthFilter('DAY');
                         setPage(0);
                       }}
                     >
@@ -929,6 +927,7 @@ export function AdminModal({
                     </button>
                   )}
                 </div>
+
               </>
             )}
 
