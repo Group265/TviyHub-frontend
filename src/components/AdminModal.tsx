@@ -61,6 +61,28 @@ function paymentMethodLabel(method?: string | null): string {
   if (method === 'CASH') return 'ГОТІВКА';
   return method || 'КАРТКА';
 }
+
+function SortIcon({ dir }: { dir?: 'asc' | 'desc' }) {
+  return (
+    <svg className="sort-icon" width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+      <path
+        d="M3 5L6 2L9 5"
+        className={dir === 'asc' ? 'active' : ''}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 9L6 12L9 9"
+        className={dir === 'desc' ? 'active' : ''}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const MONTH_NAMES_UK: Record<string, string> = {
   '01': 'Січень',
   '02': 'Лютий',
@@ -1084,7 +1106,7 @@ export function AdminModal({
         visibleBookings.length ? (
           <div className="table-scroll">
             <table>
-                            <thead>
+              <thead>
                 <tr>
                   <th aria-sort={bookingSort?.key === 'date' ? (bookingSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                     <button
@@ -1093,7 +1115,7 @@ export function AdminModal({
                       style={{ justifyContent: 'flex-start' }}
                       onClick={() => toggleSort(bookingSort, 'date', setBookingSort)}
                     >
-                      ДАТА <span>{bookingSort?.key === 'date' ? (bookingSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                      ДАТА <SortIcon dir={bookingSort?.key === 'date' ? bookingSort.dir : undefined} />
                     </button>
                   </th>
                   <th>КЛІЄНТ</th>
@@ -1104,7 +1126,7 @@ export function AdminModal({
                       className="admin-sort-button"
                       onClick={() => toggleSort(bookingSort, 'amount', setBookingSort)}
                     >
-                      СУМА <span>{bookingSort?.key === 'amount' ? (bookingSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                      СУМА <SortIcon dir={bookingSort?.key === 'amount' ? bookingSort.dir : undefined} />
                     </button>
                   </th>
                   <th>СТАТУС БРОНІ</th>
@@ -1232,7 +1254,7 @@ export function AdminModal({
         visibleSubscriptions.length ? (
           <div className="table-scroll">
             <table>
-                            <thead>
+              <thead>
                 <tr>
                   <th>КЛІЄНТ</th>
                   <th>АБОНЕМЕНТ</th>
@@ -1243,7 +1265,7 @@ export function AdminModal({
                       style={{ justifyContent: 'flex-start' }}
                       onClick={() => toggleSort(subSort, 'endDate', setSubSort)}
                     >
-                      ТЕРМІН ДІЇ <span>{subSort?.key === 'endDate' ? (subSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                      ТЕРМІН ДІЇ <SortIcon dir={subSort?.key === 'endDate' ? subSort.dir : undefined} />
                     </button>
                   </th>
                   <th>СТАТУС</th>
@@ -1380,7 +1402,7 @@ export function AdminModal({
         visiblePayments.length ? (
           <div className="table-scroll">
             <table>
-                            <thead>
+              <thead>
                 <tr>
                   <th aria-sort={paymentSort?.key === 'date' ? (paymentSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                     <button
@@ -1389,7 +1411,7 @@ export function AdminModal({
                       style={{ justifyContent: 'flex-start' }}
                       onClick={() => toggleSort(paymentSort, 'date', setPaymentSort)}
                     >
-                      ДАТА <span>{paymentSort?.key === 'date' ? (paymentSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                      ДАТА <SortIcon dir={paymentSort?.key === 'date' ? paymentSort.dir : undefined} />
                     </button>
                   </th>
                   <th>КЛІЄНТ</th>
@@ -1401,7 +1423,7 @@ export function AdminModal({
                       className="admin-sort-button"
                       onClick={() => toggleSort(paymentSort, 'amount', setPaymentSort)}
                     >
-                      СУМА <span>{paymentSort?.key === 'amount' ? (paymentSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                      СУМА <SortIcon dir={paymentSort?.key === 'amount' ? paymentSort.dir : undefined} />
                     </button>
                   </th>
                   <th>СТАТУС ПЛАТЕЖУ</th>

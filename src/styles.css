@@ -13,10 +13,58 @@
 .admin-filters input,.admin-filters select{width:100%}
 .status.active{color:#17633d;background:#e5f6ed}
 .admin-payment-actions{gap:4px 12px;margin-top:4px;justify-content:center}
-.admin-sort-cell{text-align:center}
-.admin-sort-button{display:flex;width:100%;justify-content:center;align-items:center;gap:5px;white-space:nowrap;padding:0;border:0;background:none;color:inherit;text-transform:inherit}
-.admin-sort-button:hover,th[aria-sort] .admin-sort-button{color:#343a40}
-.admin-sort-button span{font-size:14px;line-height:1}
+.admin-sort-cell {
+  text-align: center;
+}
+
+.admin-sort-button {
+  display: inline-flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  transition: color 0.15s;
+}
+
+.admin-sort-button:hover {
+  color: #212529;
+}
+
+th[aria-sort] .admin-sort-button {
+  color: #212529;
+  font-weight: 600;
+}
+
+.admin-sort-button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.sort-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+.sort-icon path {
+  stroke: #adb5bd;
+  transition: stroke 0.15s;
+}
+
+.admin-sort-button:hover .sort-icon path:not(.active) {
+  stroke: #7d858c;
+}
+
+.sort-icon path.active {
+  stroke: var(--orange);
+}
 
 .checkout-page{margin-top:28px;margin-bottom:48px;padding:clamp(16px,4vw,36px);background:#fff;border:1px solid var(--border);border-radius:20px}
 .checkout-page h1{margin:0 0 20px;font-size:clamp(1.65rem,4vw,2.35rem)}
