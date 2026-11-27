@@ -634,3 +634,8 @@
 .nowrap {
   white-space: nowrap;
 }
+
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+}

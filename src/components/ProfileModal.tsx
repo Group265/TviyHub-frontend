@@ -445,15 +445,61 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       <h3>Активні та майбутні абонементи</h3>
       <div className="table-scroll">
         <table>
-          <thead><tr><th>Місце</th><th>Період</th><th>Статус</th><th>Дії</th></tr></thead>
-          <tbody>{activeSubscriptions.map(sub => <tr key={sub.id}>
-            <td>Місце №{sub.workspaceId}</td>
-            <td>{sub.startDate} — {sub.endDate}</td>
-            <td>{statusText(sub.status)}<small>{statusText(sub.paymentStatus)}</small></td>
-            <td>{canUserCancelSubscription(sub, now) && <button type="button" className="text-button danger" disabled={busy} onClick={() => {
-              setSubCancelError(''); setSubCancelNotice(''); setConfirmCancelSub(sub);
-            }}>Скасувати</button>}</td>
-          </tr>)}</tbody>
+          <thead>
+            <tr>
+              <th>Місце</th>
+              <th>Період</th>
+              <th>Статус</th>
+              <th>Оплата</th>
+              <th>Дії</th>
+            </tr>
+          </thead>
+          <tbody>{activeSubscriptions.map(sub => {
+            const today = now.slice(0, 10);
+            const isUpcomingSub = sub.status === 'ACTIVE' && sub.startDate > today;
+            const subStatusLabel = isUpcomingSub ? 'Майбутній' : statusText(sub.status);
+            const subStatusTone = isUpcomingSub ? 'warning' : statusBadgeTone(sub.status);
+            const canCancel = canUserCancelSubscription(sub, now);
+
+            return (
+              <tr key={sub.id}>
+                <td>Місце №{sub.workspaceId}</td>
+                <td>{sub.startDate} — {sub.endDate}</td>
+                <td>
+                  <span className={`profile-badge ${subStatusTone}`}>
+                    {subStatusLabel}
+                  </span>
+                </td>
+                <td>
+                  {sub.paymentStatus ? (
+                    <span className={`profile-badge ${statusBadgeTone(sub.paymentStatus)}`}>
+                      {statusText(sub.paymentStatus)}
+                    </span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+                <td>
+                  {canCancel ? (
+                    <button
+                      type="button"
+                      className="text-button danger"
+                      disabled={busy}
+                      onClick={() => {
+                        setSubCancelError('');
+                        setSubCancelNotice('');
+                        setConfirmCancelSub(sub);
+                      }}
+                    >
+                      Скасувати
+                    </button>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}</tbody>
         </table>
       </div>
     </>}
