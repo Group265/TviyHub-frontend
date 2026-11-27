@@ -455,11 +455,21 @@ export function AdminModal({
   const filteredPayments = useMemo(() => {
     return paymentsInMonth.filter(p => {
       if (paymentFilter === 'ACTION_REQUIRED') {
-        return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
+        const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
+        const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
+        const isCancelled =
+          (booking && bookingDisplayStatus(booking, now) === 'CANCELLED') ||
+          (sub && sub.status === 'CANCELLED');
+
+        const needsPayment = p.status === 'UNPAID' && !isCancelled;
+        const needsRefund = p.status === 'REFUND_PENDING';
+        if (!needsPayment && !needsRefund) return false;
+            } else if (paymentFilter !== 'ALL' && p.status !== paymentFilter) {
+        return false;
       }
-      return paymentFilter === 'ALL' || p.status === paymentFilter;
+      return true;
     });
-  }, [paymentsInMonth, paymentFilter]);
+  }, [paymentsInMonth, paymentFilter, bookingsById, subscriptionsById, now]);
 
   function changeTab(next: Tab) {
     setTab(next);
