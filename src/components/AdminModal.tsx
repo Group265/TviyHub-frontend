@@ -760,8 +760,6 @@ export function AdminModal({
             >
               <option value="UPCOMING">Майбутні / активні</option>
               <option value="ALL">Всі статуси</option>
-              <option value="UPCOMING">Майбутні / активні</option>
-              <option value="CONFIRMED">Підтверджено</option>
               <option value="COMPLETED">Завершено</option>
               <option value="CANCELLED">Скасовано</option>
             </select>
