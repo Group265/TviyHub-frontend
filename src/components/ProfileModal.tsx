@@ -342,15 +342,31 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
             const showPayOnline = user.role === 'USER' && pendingPayment;
             const showRepeat = !pendingPayment && !isUpcomingBooking(item, now) && !isRetiredWorkspace(item.workspace);
             const showCancel = canCancelBooking(item, now);
-            const hasAnyAction = showPayOnline || showRepeat || showCancel;
+                        const hasAnyAction = showPayOnline || showRepeat || showCancel;
+            const displayStatus = pendingPayment ? item.status : bookingDisplayStatus(item, now);
 
             return <tr key={item.id}>
               <td>{item.bookingDate}</td><td>{displayWorkspace(item.workspace)}</td>
               <td>{item.startTime?.slice(0, 5) ?? bookingOpenTime}–{item.endTime?.slice(0, 5) ?? bookingCloseTime}</td>
-              <td>{money(item.totalPrice)}<small>{pendingPayment ? <span className="status">{statusText(item.status)}</span> : statusText(bookingDisplayStatus(item, now))}</small>
+              <td>
+                {money(item.totalPrice)}
+                <small>
+                  <span className={`profile-badge ${statusBadgeTone(displayStatus)}`}>
+                    {statusText(displayStatus)}
+                  </span>
+                </small>
                 {pendingPayment && deadline && <small>{paymentDeadlineText(deadline)}</small>}
               </td>
-              <td>{paymentLabel}</td>
+              <td>
+                {paymentStatus ? (
+                  <span className={`profile-badge ${statusBadgeTone(paymentStatus)}`}>
+                    {paymentLabel}
+                  </span>
+                ) : (
+                  paymentLabel
+                )}
+              </td>
+
               <td>
                 {hasAnyAction ? (
                   <div className="actions">
