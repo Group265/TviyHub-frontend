@@ -25,7 +25,7 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
   const [subscriptionError, setSubscriptionError] = useState('');
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [page, setPage] = useState(0);
-  const [scope, setScope] = useState<'all' | 'upcoming' | 'past' | 'cancelled'>('all');
+  const [scope, setScope] = useState<'all' | 'upcoming' | 'past' | 'cancelled'>('upcoming');
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
