@@ -142,7 +142,7 @@ export function AdminModal({
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
 
   const [page, setPage] = useState(0);
-  const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('ALL');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('UPCOMING');
   const [bookingPaymentFilter, setBookingPaymentFilter] = useState<string>('ALL');
   const [subStatusFilter, setSubStatusFilter] = useState<string>('CURRENT');
   const [subPaymentFilter, setSubPaymentFilter] = useState<string>('ALL');
@@ -464,7 +464,7 @@ export function AdminModal({
   function changeTab(next: Tab) {
     setTab(next);
     setPage(0);
-    setBookingStatusFilter('ALL');
+    setBookingStatusFilter('UPCOMING');
     setBookingPaymentFilter('ALL');
     setSubStatusFilter('CURRENT');
     setSubPaymentFilter('ALL');
@@ -758,6 +758,7 @@ export function AdminModal({
                 setPage(0);
               }}
             >
+              <option value="UPCOMING">Майбутні / активні</option>
               <option value="ALL">Всі статуси</option>
               <option value="UPCOMING">Майбутні / активні</option>
               <option value="CONFIRMED">Підтверджено</option>
@@ -784,12 +785,12 @@ export function AdminModal({
             </select>
           </label>
 
-          {(bookingStatusFilter !== 'ALL' || bookingPaymentFilter !== 'ALL') && (
+          {(bookingStatusFilter !== 'UPCOMING' || bookingPaymentFilter !== 'ALL') && (
             <button
               type="button"
               className="text-button muted-link reset-filters-btn"
               onClick={() => {
-                setBookingStatusFilter('ALL');
+                setBookingStatusFilter('UPCOMING');
                 setBookingPaymentFilter('ALL');
                 setPage(0);
               }}
