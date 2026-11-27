@@ -1314,6 +1314,10 @@ export function AdminModal({
                       ? `Абонемент №${sub.id}`
                       : `Платіж №${payment.id}`;
                   const dateLabel = paymentDateIso(payment) || '—';
+                  const isCancelled =
+                    (booking && bookingDisplayStatus(booking, now) === 'CANCELLED') ||
+                    (sub && sub.status === 'CANCELLED');
+                  const canPay = payment.status === 'UNPAID' && !isCancelled;
 
                   return (
                     <tr key={payment.id}>
@@ -1358,28 +1362,32 @@ export function AdminModal({
                           </button>
                         )}
                         {payment.status === 'UNPAID' && (
-                          <div className="pay-choice-group">
-                            <span className="pay-choice-label">Сплатити</span>
-                            <div className="pay-choice-links">
-                              <button
-                                type="button"
-                                className="text-button"
-                                disabled={busy}
-                                onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CASH' })}
-                              >
-                                Готівка
-                              </button>
-                              <span className="pay-choice-sep">/</span>
-                              <button
-                                type="button"
-                                className="text-button"
-                                disabled={busy}
-                                onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CARD' })}
-                              >
-                                Картка
-                              </button>
+                          canPay ? (
+                            <div className="pay-choice-group">
+                              <span className="pay-choice-label">Сплатити</span>
+                              <div className="pay-choice-links">
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  disabled={busy}
+                                  onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CASH' })}
+                                >
+                                  Готівка
+                                </button>
+                                <span className="pay-choice-sep">/</span>
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  disabled={busy}
+                                  onClick={() => ask({ type: 'payment', label: purpose, payment, method: 'CARD' })}
+                                >
+                                  Картка
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <span className="muted">—</span>
+                          )
                         )}
                         {payment.status === 'REFUNDED' && <span className="muted">—</span>}
                       </td>
