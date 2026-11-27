@@ -147,7 +147,7 @@ export function AdminModal({
   const [subStatusFilter, setSubStatusFilter] = useState<string>('ALL');
   const [subPaymentFilter, setSubPaymentFilter] = useState<string>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
-  const [paymentMonthFilter, setPaymentMonthFilter] = useState<string>('ALL');
+  const [paymentMonthFilter, setPaymentMonthFilter] = useState<string>('DAY');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -368,23 +368,36 @@ export function AdminModal({
           return (p.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '').slice(0, 10);
         };
 
+            const todayIso = now.slice(0, 10); // "YYYY-MM-DD" по времени заведения
+        const currentMonthIso = now.slice(0, 7); // "YYYY-MM"
+        const currentYearIso = now.slice(0, 4); // "YYYY"
+
+        const matchesPaymentPeriod = (isoDate: string): boolean => {
+          if (!isoDate) return paymentMonthFilter === 'ALL';
+          if (paymentMonthFilter === 'ALL') return true;
+          if (paymentMonthFilter === 'DAY') return isoDate.startsWith(todayIso);
+          if (paymentMonthFilter === 'MONTH') return isoDate.startsWith(currentMonthIso);
+          if (paymentMonthFilter === 'YEAR') return isoDate.startsWith(currentYearIso);
+          return isoDate.startsWith(paymentMonthFilter);
+        };
+
         const availablePaymentMonths = useMemo(() => {
-              const set = new Set<string>();
-              for (const p of payments) {
-                if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
-                  set.add(p.paidAt.slice(0, 7));
-                }
-                if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
-                  set.add(p.refundedAt.slice(0, 7));
-                }
-              }
-              return Array.from(set).sort((a, b) => b.localeCompare(a));
-            }, [payments]);
+          const set = new Set<string>();
+          for (const p of payments) {
+            if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
+              set.add(p.paidAt.slice(0, 7));
+            }
+            if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
+              set.add(p.refundedAt.slice(0, 7));
+            }
+          }
+          return Array.from(set).sort((a, b) => b.localeCompare(a));
+        }, [payments]);
 
         const paymentsInMonth = useMemo(() => {
           if (paymentMonthFilter === 'ALL') return payments;
-          return payments.filter(p => paymentDateIso(p).startsWith(paymentMonthFilter));
-        }, [payments, paymentMonthFilter, bookingsById, subscriptionsById]);
+          return payments.filter(p => matchesPaymentPeriod(paymentDateIso(p)));
+        }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
 
         const paymentSummary = useMemo(() => {
           let paidTotal = 0;
@@ -399,9 +412,7 @@ export function AdminModal({
           for (const p of payments) {
             const isPaidState = p.status === 'PAID' || p.status === 'REFUND_PENDING' || p.status === 'REFUNDED';
             if (isPaidState && p.paidAt) {
-              const paidMatchesMonth =
-                paymentMonthFilter === 'ALL' || p.paidAt.startsWith(paymentMonthFilter);
-              if (paidMatchesMonth) {
+              if (matchesPaymentPeriod(p.paidAt)) {
                 paidTotal += p.amount;
                 paidCount++;
                 if (p.paymentMethod === 'CASH') {
@@ -416,9 +427,7 @@ export function AdminModal({
 
             if (p.status === 'REFUNDED') {
               const refundIso = p.refundedAt ?? p.paidAt ?? paymentDateIso(p);
-              const refundMatchesMonth =
-                paymentMonthFilter === 'ALL' || refundIso.startsWith(paymentMonthFilter);
-              if (refundMatchesMonth) {
+              if (matchesPaymentPeriod(refundIso)) {
                 refundedTotal += p.amount;
                 refundedCount++;
               }
@@ -436,7 +445,7 @@ export function AdminModal({
             refundedCount,
             netTotal: paidTotal - refundedTotal,
           };
-        }, [payments, paymentMonthFilter, bookingsById, subscriptionsById]);
+        }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
 
     const filteredPayments = useMemo(() => {
       return paymentsInMonth.filter(p => {
@@ -455,7 +464,7 @@ export function AdminModal({
     setSubStatusFilter('ALL');
     setSubPaymentFilter('ALL');
     setPaymentFilter('ALL');
-    setPaymentMonthFilter('ALL');
+    setPaymentMonthFilter('DAY');
     setError('');
     setNotice('');
     setConfirm(null);
@@ -734,57 +743,61 @@ export function AdminModal({
       </div>
 
       {!loading && !loadError && tab === 'bookings' && (
-        <div className="admin-filters">
-          <label>
-            Статус броні
-            <select
-              value={bookingStatusFilter}
-              onChange={e => {
-                setBookingStatusFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="ALL">Всі статуси</option>
-              <option value="UPCOMING">Майбутні (активні)</option>
-              <option value="CONFIRMED">Підтверджено</option>
-              <option value="PENDING_PAYMENT">Очікує оплати</option>
-              <option value="COMPLETED">Завершено</option>
-              <option value="CANCELLED">Скасовано</option>
-            </select>
-          </label>
+                        <div className="admin-filters">
+                  <label>
+                    Період звіту
+                    <select
+                      value={paymentMonthFilter}
+                      onChange={e => {
+                        setPaymentMonthFilter(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      <option value="DAY">Поточний день ({todayIso.split('-').reverse().join('.')})</option>
+                      <option value="MONTH">Поточний місяць ({formatMonthLabel(currentMonthIso)})</option>
+                      <option value="YEAR">Поточний рік ({currentYearIso})</option>
+                      <option value="ALL">За весь час</option>
+                      {availablePaymentMonths.map(ym => (
+                        <option key={ym} value={ym}>
+                          {formatMonthLabel(ym)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-          <label>
-            Статус оплати
-            <select
-              value={bookingPaymentFilter}
-              onChange={e => {
-                setBookingPaymentFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="ALL">Всі оплати</option>
-              <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
-              <option value="PAID">Сплачено</option>
-              <option value="UNPAID">Не сплачено</option>
-              <option value="REFUND_PENDING">Очікує повернення</option>
-              <option value="REFUNDED">Повернено</option>
-            </select>
-          </label>
+                  <label>
+                    Фільтр за статусом платежу
+                    <select
+                      value={paymentFilter}
+                      onChange={e => {
+                        setPaymentFilter(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      <option value="ALL">Всі платежі</option>
+                      <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
+                      <option value="PAID">Сплачено</option>
+                      <option value="UNPAID">Не сплачено</option>
+                      <option value="REFUND_PENDING">Очікує повернення</option>
+                      <option value="REFUNDED">Повернено</option>
+                    </select>
+                  </label>
 
-          {(bookingStatusFilter !== 'ALL' || bookingPaymentFilter !== 'ALL') && (
-            <button
-              type="button"
-              className="text-button muted-link reset-filters-btn"
-              onClick={() => {
-                setBookingStatusFilter('ALL');
-                setBookingPaymentFilter('ALL');
-                setPage(0);
-              }}
-            >
-              Скинути фільтри
-            </button>
-          )}
-        </div>
+                  {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'DAY') && (
+                    <button
+                      type="button"
+                      className="text-button muted-link reset-filters-btn"
+                      onClick={() => {
+                        setPaymentFilter('ALL');
+                        setPaymentMonthFilter('DAY');
+                        setPage(0);
+                      }}
+                    >
+                      Скинути фільтри
+                    </button>
+                  )}
+                </div>
+
       )}
 
       {!loading && !loadError && tab === 'subscriptions' && (
