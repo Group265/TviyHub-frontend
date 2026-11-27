@@ -144,7 +144,7 @@ export function AdminModal({
   const [page, setPage] = useState(0);
   const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('ALL');
   const [bookingPaymentFilter, setBookingPaymentFilter] = useState<string>('ALL');
-  const [subStatusFilter, setSubStatusFilter] = useState<string>('ALL');
+  const [subStatusFilter, setSubStatusFilter] = useState<string>('CURRENT');
   const [subPaymentFilter, setSubPaymentFilter] = useState<string>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
   const [paymentMonthFilter, setPaymentMonthFilter] = useState<string>('DAY');
@@ -342,10 +342,14 @@ export function AdminModal({
       return true;
     });
   }, [bookings, bookingPayments, bookingStatusFilter, bookingPaymentFilter, now]);
-  const filteredSubscriptions = useMemo(() => {
+    const filteredSubscriptions = useMemo(() => {
     return subscriptions.filter(sub => {
       const payStatus = subscriptionPayments.get(sub.id)?.status ?? sub.paymentStatus;
-      if (subStatusFilter !== 'ALL' && sub.status !== subStatusFilter) return false;
+      if (subStatusFilter === 'CURRENT') {
+        if (sub.status === 'CANCELLED' || sub.status === 'EXPIRED') return false;
+      } else if (subStatusFilter !== 'ALL' && sub.status !== subStatusFilter) {
+        return false;
+      }
       if (subPaymentFilter === 'ACTION_REQUIRED') {
         const needsPayment = payStatus === 'UNPAID' && sub.status !== 'CANCELLED';
         const needsRefund = payStatus === 'REFUND_PENDING';
@@ -462,7 +466,7 @@ export function AdminModal({
     setPage(0);
     setBookingStatusFilter('ALL');
     setBookingPaymentFilter('ALL');
-    setSubStatusFilter('ALL');
+    setSubStatusFilter('CURRENT');
     setSubPaymentFilter('ALL');
     setPaymentFilter('ALL');
     setPaymentMonthFilter('DAY');
@@ -807,6 +811,7 @@ export function AdminModal({
                 setPage(0);
               }}
             >
+              <option value="CURRENT">Активні та очікують оплати</option>
               <option value="ALL">Всі статуси</option>
               <option value="ACTIVE">Активний</option>
               <option value="PENDING_PAYMENT">Очікує оплати</option>
@@ -833,12 +838,12 @@ export function AdminModal({
             </select>
           </label>
 
-          {(subStatusFilter !== 'ALL' || subPaymentFilter !== 'ALL') && (
+          {(subStatusFilter !== 'CURRENT' || subPaymentFilter !== 'ALL') && (
             <button
               type="button"
               className="text-button muted-link reset-filters-btn"
               onClick={() => {
-                setSubStatusFilter('ALL');
+                setSubStatusFilter('CURRENT');
                 setSubPaymentFilter('ALL');
                 setPage(0);
               }}
