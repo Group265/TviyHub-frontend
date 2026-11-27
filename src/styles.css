@@ -522,6 +522,11 @@
   gap: 3px;
 }
 
+.admin-modal td:last-child > .muted {
+  display: block;
+  text-align: center;
+}
+
 .pay-choice-label {
   font-size: 13px;
   font-weight: 500;
