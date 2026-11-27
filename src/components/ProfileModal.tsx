@@ -294,10 +294,10 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
       <div className="profile-tabs" role="tablist" aria-label="Фільтр історії бронювань">
         {(
           [
-            ['all', `Усі бронювання (${counts.all})`],
             ['upcoming', `Майбутні (${counts.upcoming})`],
             ['past', `Минулі (${counts.past})`],
             ['cancelled', `Скасовані (${counts.cancelled})`],
+            ['all', `Усі бронювання (${counts.all})`],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -338,7 +338,12 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
               createdAt: item.createdAt ?? paymentBooking?.createdAt,
               paymentDeadline: item.paymentDeadline ?? paymentBooking?.paymentDeadline,
             });
-            const latest = deadline ?? start;
+                        const latest = deadline ?? start;
+            const showPayOnline = user.role === 'USER' && pendingPayment;
+            const showRepeat = !pendingPayment && !isUpcomingBooking(item, now) && !isRetiredWorkspace(item.workspace);
+            const showCancel = canCancelBooking(item, now);
+            const hasAnyAction = showPayOnline || showRepeat || showCancel;
+
             return <tr key={item.id}>
               <td>{item.bookingDate}</td><td>{displayWorkspace(item.workspace)}</td>
               <td>{item.startTime?.slice(0, 5) ?? bookingOpenTime}–{item.endTime?.slice(0, 5) ?? bookingCloseTime}</td>
@@ -346,17 +351,25 @@ export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, s
                 {pendingPayment && deadline && <small>{paymentDeadlineText(deadline)}</small>}
               </td>
               <td>{paymentLabel}</td>
-              <td><div className="actions">
-                {user.role === 'USER' && pendingPayment && <button type="button" className="btn outline small"
-                  disabled={busy || !paymentId || latest <= now}
-                  onClick={() => { if (paymentId) payOnline(item, paymentId, latest); }}>Оплатити онлайн</button>}
-                {!pendingPayment && !isRetiredWorkspace(item.workspace) && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace, item)}>Повторити</button>}
-                {canCancelBooking(item, now) && <button className="text-button danger" disabled={busy} onClick={() => {
-                  setCancelError(''); setCancelNotice(''); setConfirmCancel(item);
-                }}>Скасувати</button>}
-              </div>{user.role === 'USER' && pendingPayment && (latest <= now || !paymentId) && <small>
-                {latest <= now ? 'Строк оплати минув.' : 'Онлайн-оплата недоступна.'}
-              </small>}</td>
+              <td>
+                {hasAnyAction ? (
+                  <div className="actions">
+                    {showPayOnline && <button type="button" className="btn outline small"
+                      disabled={busy || !paymentId || latest <= now}
+                      onClick={() => { if (paymentId) payOnline(item, paymentId, latest); }}>Оплатити онлайн</button>}
+                    {showRepeat && <button className="btn outline small" disabled={busy} onClick={() => onRepeat(item.workspace, item)}>Повторити</button>}
+                    {showCancel && <button className="text-button danger" disabled={busy} onClick={() => {
+                      setCancelError(''); setCancelNotice(''); setConfirmCancel(item);
+                    }}>Скасувати</button>}
+                  </div>
+                ) : (
+                  <span className="muted">—</span>
+                )}
+                {showPayOnline && (latest <= now || !paymentId) && <small>
+                  {latest <= now ? 'Строк оплати минув.' : 'Онлайн-оплата недоступна.'}
+                </small>}
+              </td>
+
             </tr>;
           })}</tbody>
         </table>
