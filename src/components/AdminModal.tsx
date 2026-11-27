@@ -356,105 +356,106 @@ export function AdminModal({
       return true;
     });
   }, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter]);
-        const paymentDateIso = (p: Payment): string => {
-          const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
-          const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
-          if (p.status === 'REFUNDED' && p.refundedAt) {
-            return p.refundedAt.slice(0, 10);
+  const paymentDateIso = (p: Payment): string => {
+    const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
+    const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
+    if (p.status === 'REFUNDED' && p.refundedAt) {
+      return p.refundedAt.slice(0, 10);
+    }
+    if (p.paidAt) {
+      return p.paidAt.slice(0, 10);
+    }
+    return (p.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '').slice(0, 10);
+  };
+
+  const todayIso = now.slice(0, 10); // "YYYY-MM-DD" по времени заведения
+  const currentMonthIso = now.slice(0, 7); // "YYYY-MM"
+  const currentYearIso = now.slice(0, 4); // "YYYY"
+
+  const matchesPaymentPeriod = (isoDate: string): boolean => {
+    if (!isoDate) return paymentMonthFilter === 'ALL';
+    if (paymentMonthFilter === 'ALL') return true;
+    if (paymentMonthFilter === 'DAY') return isoDate.startsWith(todayIso);
+    if (paymentMonthFilter === 'MONTH') return isoDate.startsWith(currentMonthIso);
+    if (paymentMonthFilter === 'YEAR') return isoDate.startsWith(currentYearIso);
+    return isoDate.startsWith(paymentMonthFilter);
+  };
+
+  const availablePaymentMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of payments) {
+      if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
+        set.add(p.paidAt.slice(0, 7));
+      }
+      if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
+        set.add(p.refundedAt.slice(0, 7));
+      }
+    }
+    set.delete(currentMonthIso); // убираем дубликат текущего месяца
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [payments, currentMonthIso]);
+
+  const paymentsInMonth = useMemo(() => {
+    if (paymentMonthFilter === 'ALL') return payments;
+    return payments.filter(p => matchesPaymentPeriod(paymentDateIso(p)));
+  }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
+
+  const paymentSummary = useMemo(() => {
+    let paidTotal = 0;
+    let paidCount = 0;
+    let cardTotal = 0;
+    let cardCount = 0;
+    let cashTotal = 0;
+    let cashCount = 0;
+    let refundedTotal = 0;
+    let refundedCount = 0;
+
+    for (const p of payments) {
+      const isPaidState = p.status === 'PAID' || p.status === 'REFUND_PENDING' || p.status === 'REFUNDED';
+      if (isPaidState && p.paidAt) {
+        if (matchesPaymentPeriod(p.paidAt)) {
+          paidTotal += p.amount;
+          paidCount++;
+          if (p.paymentMethod === 'CASH') {
+            cashTotal += p.amount;
+            cashCount++;
+          } else {
+            cardTotal += p.amount;
+            cardCount++;
           }
-          if (p.paidAt) {
-            return p.paidAt.slice(0, 10);
-          }
-          return (p.createdAt ?? booking?.bookingDate ?? sub?.startDate ?? '').slice(0, 10);
-        };
-
-            const todayIso = now.slice(0, 10); // "YYYY-MM-DD" по времени заведения
-        const currentMonthIso = now.slice(0, 7); // "YYYY-MM"
-        const currentYearIso = now.slice(0, 4); // "YYYY"
-
-        const matchesPaymentPeriod = (isoDate: string): boolean => {
-          if (!isoDate) return paymentMonthFilter === 'ALL';
-          if (paymentMonthFilter === 'ALL') return true;
-          if (paymentMonthFilter === 'DAY') return isoDate.startsWith(todayIso);
-          if (paymentMonthFilter === 'MONTH') return isoDate.startsWith(currentMonthIso);
-          if (paymentMonthFilter === 'YEAR') return isoDate.startsWith(currentYearIso);
-          return isoDate.startsWith(paymentMonthFilter);
-        };
-
-        const availablePaymentMonths = useMemo(() => {
-          const set = new Set<string>();
-          for (const p of payments) {
-            if (p.paidAt && /^\d{4}-\d{2}$/.test(p.paidAt.slice(0, 7))) {
-              set.add(p.paidAt.slice(0, 7));
-            }
-            if (p.refundedAt && /^\d{4}-\d{2}$/.test(p.refundedAt.slice(0, 7))) {
-              set.add(p.refundedAt.slice(0, 7));
-            }
-          }
-          return Array.from(set).sort((a, b) => b.localeCompare(a));
-        }, [payments]);
-
-        const paymentsInMonth = useMemo(() => {
-          if (paymentMonthFilter === 'ALL') return payments;
-          return payments.filter(p => matchesPaymentPeriod(paymentDateIso(p)));
-        }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
-
-        const paymentSummary = useMemo(() => {
-          let paidTotal = 0;
-          let paidCount = 0;
-          let cardTotal = 0;
-          let cardCount = 0;
-          let cashTotal = 0;
-          let cashCount = 0;
-          let refundedTotal = 0;
-          let refundedCount = 0;
-
-          for (const p of payments) {
-            const isPaidState = p.status === 'PAID' || p.status === 'REFUND_PENDING' || p.status === 'REFUNDED';
-            if (isPaidState && p.paidAt) {
-              if (matchesPaymentPeriod(p.paidAt)) {
-                paidTotal += p.amount;
-                paidCount++;
-                if (p.paymentMethod === 'CASH') {
-                  cashTotal += p.amount;
-                  cashCount++;
-                } else {
-                  cardTotal += p.amount;
-                  cardCount++;
-                }
-              }
-            }
-
-            if (p.status === 'REFUNDED') {
-              const refundIso = p.refundedAt ?? p.paidAt ?? paymentDateIso(p);
-              if (matchesPaymentPeriod(refundIso)) {
-                refundedTotal += p.amount;
-                refundedCount++;
-              }
-            }
-          }
-
-          return {
-            paidTotal,
-            paidCount,
-            cardTotal,
-            cardCount,
-            cashTotal,
-            cashCount,
-            refundedTotal,
-            refundedCount,
-            netTotal: paidTotal - refundedTotal,
-          };
-        }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
-
-    const filteredPayments = useMemo(() => {
-      return paymentsInMonth.filter(p => {
-        if (paymentFilter === 'ACTION_REQUIRED') {
-          return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
         }
-        return paymentFilter === 'ALL' || p.status === paymentFilter;
-      });
-    }, [paymentsInMonth, paymentFilter]);
+      }
+
+      if (p.status === 'REFUNDED') {
+        const refundIso = p.refundedAt ?? p.paidAt ?? paymentDateIso(p);
+        if (matchesPaymentPeriod(refundIso)) {
+          refundedTotal += p.amount;
+          refundedCount++;
+        }
+      }
+    }
+
+    return {
+      paidTotal,
+      paidCount,
+      cardTotal,
+      cardCount,
+      cashTotal,
+      cashCount,
+      refundedTotal,
+      refundedCount,
+      netTotal: paidTotal - refundedTotal,
+    };
+  }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
+
+  const filteredPayments = useMemo(() => {
+    return paymentsInMonth.filter(p => {
+      if (paymentFilter === 'ACTION_REQUIRED') {
+        return p.status === 'UNPAID' || p.status === 'REFUND_PENDING';
+      }
+      return paymentFilter === 'ALL' || p.status === paymentFilter;
+    });
+  }, [paymentsInMonth, paymentFilter]);
 
   function changeTab(next: Tab) {
     setTab(next);
@@ -742,7 +743,7 @@ export function AdminModal({
         </button>
       </div>
 
-            {!loading && !loadError && tab === 'bookings' && (
+      {!loading && !loadError && tab === 'bookings' && (
         <div className="admin-filters">
           <label>
             Статус бронювання
@@ -848,88 +849,88 @@ export function AdminModal({
         </div>
       )}
 
-            {!loading && !loadError && tab === 'payments' && (
-              <>
-                <div className="payment-summary-grid">
-                  <div className="payment-summary-card accent">
-                    <span>Чистий дохід</span>
-                    <strong>{money(paymentSummary.netTotal)}</strong>
-                    <small>Сплачено {money(paymentSummary.paidTotal)} ({paymentSummary.paidCount} шт.)</small>
-                  </div>
-                  <div className="payment-summary-card">
-                    <span>Безготівка (Картка)</span>
-                    <strong>{money(paymentSummary.cardTotal)}</strong>
-                    <small>{paymentSummary.cardCount} оплат карткою / Stripe</small>
-                  </div>
-                  <div className="payment-summary-card">
-                    <span>Готівка</span>
-                    <strong>{money(paymentSummary.cashTotal)}</strong>
-                    <small>{paymentSummary.cashCount} оплат готівкою</small>
-                  </div>
-                  <div className="payment-summary-card">
-                    <span>Повернення</span>
-                    <strong>{money(paymentSummary.refundedTotal)}</strong>
-                    <small>{paymentSummary.refundedCount} повернених платежів</small>
-                  </div>
-                </div>
+      {!loading && !loadError && tab === 'payments' && (
+        <>
+          <div className="payment-summary-grid">
+            <div className="payment-summary-card accent">
+              <span>Чистий дохід</span>
+              <strong>{money(paymentSummary.netTotal)}</strong>
+              <small>Сплачено {money(paymentSummary.paidTotal)} ({paymentSummary.paidCount} шт.)</small>
+            </div>
+            <div className="payment-summary-card">
+              <span>Безготівка (Картка)</span>
+              <strong>{money(paymentSummary.cardTotal)}</strong>
+              <small>{paymentSummary.cardCount} оплат карткою / Stripe</small>
+            </div>
+            <div className="payment-summary-card">
+              <span>Готівка</span>
+              <strong>{money(paymentSummary.cashTotal)}</strong>
+              <small>{paymentSummary.cashCount} оплат готівкою</small>
+            </div>
+            <div className="payment-summary-card">
+              <span>Повернення</span>
+              <strong>{money(paymentSummary.refundedTotal)}</strong>
+              <small>{paymentSummary.refundedCount} повернених платежів</small>
+            </div>
+          </div>
 
-                                <div className="admin-filters">
-                  <label>
-                    Період звіту
-                    <select
-                      value={paymentMonthFilter}
-                      onChange={e => {
-                        setPaymentMonthFilter(e.target.value);
-                        setPage(0);
-                      }}
-                    >
-                      <option value="DAY">Поточний день ({todayIso.split('-').reverse().join('.')})</option>
-                      <option value="MONTH">Поточний місяць ({formatMonthLabel(currentMonthIso)})</option>
-                      <option value="YEAR">Поточний рік ({currentYearIso})</option>
-                      <option value="ALL">За весь час</option>
-                      {availablePaymentMonths.map(ym => (
-                        <option key={ym} value={ym}>
-                          {formatMonthLabel(ym)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+          <div className="admin-filters">
+            <label>
+              Період звіту
+              <select
+                value={paymentMonthFilter}
+                onChange={e => {
+                  setPaymentMonthFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="DAY">Поточний день ({todayIso.split('-').reverse().join('.')})</option>
+                <option value="MONTH">Поточний місяць ({formatMonthLabel(currentMonthIso)})</option>
+                <option value="YEAR">Поточний рік ({currentYearIso})</option>
+                <option value="ALL">За весь час</option>
+                {availablePaymentMonths.map(ym => (
+                  <option key={ym} value={ym}>
+                    {formatMonthLabel(ym)}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-                  <label>
-                    Фільтр за статусом платежу
-                    <select
-                      value={paymentFilter}
-                      onChange={e => {
-                        setPaymentFilter(e.target.value);
-                        setPage(0);
-                      }}
-                    >
-                      <option value="ALL">Всі платежі</option>
-                      <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
-                      <option value="PAID">Сплачено</option>
-                      <option value="UNPAID">Не сплачено</option>
-                      <option value="REFUND_PENDING">Очікує повернення</option>
-                      <option value="REFUNDED">Повернено</option>
-                    </select>
-                  </label>
+            <label>
+              Фільтр за статусом платежу
+              <select
+                value={paymentFilter}
+                onChange={e => {
+                  setPaymentFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="ALL">Всі платежі</option>
+                <option value="ACTION_REQUIRED">Потребують дій (Не сплачено / Повернення)</option>
+                <option value="PAID">Сплачено</option>
+                <option value="UNPAID">Не сплачено</option>
+                <option value="REFUND_PENDING">Очікує повернення</option>
+                <option value="REFUNDED">Повернено</option>
+              </select>
+            </label>
 
-                  {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'DAY') && (
-                    <button
-                      type="button"
-                      className="text-button muted-link reset-filters-btn"
-                      onClick={() => {
-                        setPaymentFilter('ALL');
-                        setPaymentMonthFilter('DAY');
-                        setPage(0);
-                      }}
-                    >
-                      Скинути фільтри
-                    </button>
-                  )}
-                </div>
-
-              </>
+            {(paymentFilter !== 'ALL' || paymentMonthFilter !== 'DAY') && (
+              <button
+                type="button"
+                className="text-button muted-link reset-filters-btn"
+                onClick={() => {
+                  setPaymentFilter('ALL');
+                  setPaymentMonthFilter('DAY');
+                  setPage(0);
+                }}
+              >
+                Скинути фільтри
+              </button>
             )}
+          </div>
+
+        </>
+      )}
 
       {error && !canConfirm && !extendSub && !workspaceModal && !tariffModal && <Alert>{error}</Alert>}
       {notice && <Alert success>{notice}</Alert>}
@@ -1188,10 +1189,10 @@ export function AdminModal({
                       <td>
                         <span
                           className={`status ${item.status === 'ACTIVE'
-                              ? 'active'
-                              : item.status === 'CANCELLED'
-                                ? 'cancelled'
-                                : 'completed'
+                            ? 'active'
+                            : item.status === 'CANCELLED'
+                              ? 'cancelled'
+                              : 'completed'
                             }`}
                         >
                           {statusText(item.status)}
@@ -1326,10 +1327,10 @@ export function AdminModal({
                       <td>
                         <span
                           className={`status ${payment.status === 'PAID'
-                              ? 'active'
-                              : payment.status === 'UNPAID' || payment.status === 'REFUND_PENDING'
-                                ? 'pending'
-                                : 'completed'
+                            ? 'active'
+                            : payment.status === 'UNPAID' || payment.status === 'REFUND_PENDING'
+                              ? 'pending'
+                              : 'completed'
                             }`}
                         >
                           {statusText(payment.status)}
