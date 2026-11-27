@@ -607,3 +607,34 @@
 .table-scroll:not(.admin-modal .table-scroll) table td:last-child .actions {
   justify-content: center;
 }
+
+.admin-modal .table-scroll table th:nth-child(n+4),
+.admin-modal .table-scroll table td:nth-child(n+4) {
+  text-align: center;
+}
+
+.admin-modal .sub-payment-cell {
+  align-items: center;
+  text-align: center;
+}
+
+.admin-modal .table-scroll table td:last-child .actions {
+  justify-content: center;
+}
+
+.admin-modal .status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.admin-modal .status.completed {
+  background-color: #fef3c7;
+  color: #92400e;
+}
