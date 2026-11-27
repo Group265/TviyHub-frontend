@@ -18,6 +18,22 @@ function reusesCurrentPassword(form: FormData): boolean {
   const currentPassword = form.get('currentPassword');
   return typeof currentPassword === 'string' && currentPassword.length > 0 && currentPassword === form.get('newPassword');
 }
+function statusBadgeTone(status?: string): string {
+  switch (status) {
+    case 'CONFIRMED':
+    case 'ACTIVE':
+    case 'PAID':
+      return 'success';
+    case 'PENDING_PAYMENT':
+    case 'UNPAID':
+    case 'REFUND_PENDING':
+      return 'warning';
+    case 'CANCELLED':
+      return 'danger';
+    default:
+      return 'neutral';
+  }
+}
 
 export function ProfileModal({ user, onClose, onUser, onRepeat, onLogoutError, standalone = false }: { user: User; onClose: () => void; onUser: (u: User | null) => void; onRepeat: (w: Workspace, item: HistoryItem) => void; onLogoutError: (message: string) => void; standalone?: boolean }) {
   const [allHistory, setAllHistory] = useState<HistoryItem[]>([]);
