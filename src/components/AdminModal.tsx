@@ -142,6 +142,26 @@ export function AdminModal({
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
 
   const [page, setPage] = useState(0);
+    type SortDir = 'asc' | 'desc';
+  const [bookingSort, setBookingSort] = useState<{ key: 'date' | 'amount'; dir: SortDir } | null>(null);
+  const [subSort, setSubSort] = useState<{ key: 'endDate'; dir: SortDir } | null>(null);
+  const [paymentSort, setPaymentSort] = useState<{ key: 'date' | 'amount'; dir: SortDir } | null>(null);
+
+  function toggleSort<K extends string>(
+    current: { key: K; dir: SortDir } | null,
+    key: K,
+    setter: (next: { key: K; dir: SortDir } | null) => void,
+  ) {
+    setPage(0);
+    if (!current || current.key !== key) {
+      setter({ key, dir: 'asc' });
+    } else if (current.dir === 'asc') {
+      setter({ key, dir: 'desc' });
+    } else {
+      setter(null); // 3-й клик сбрасывает сортировку в исходный порядок
+    }
+  }
+
   const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('UPCOMING');
   const [bookingPaymentFilter, setBookingPaymentFilter] = useState<string>('ALL');
   const [subStatusFilter, setSubStatusFilter] = useState<string>('CURRENT');
@@ -322,8 +342,8 @@ export function AdminModal({
     }
     return map;
   }, [tariffs]);
-  const filteredBookings = useMemo(() => {
-    return bookings.filter(booking => {
+    const filteredBookings = useMemo(() => {
+    const list = bookings.filter(booking => {
       const displayStatus = bookingDisplayStatus(booking, now);
       const payStatus = bookingPayments.get(booking.id)?.status ?? booking.paymentStatus;
       if (bookingStatusFilter === 'UPCOMING') {
@@ -341,9 +361,19 @@ export function AdminModal({
       }
       return true;
     });
-  }, [bookings, bookingPayments, bookingStatusFilter, bookingPaymentFilter, now]);
+
+    if (!bookingSort) return list;
+    const mult = bookingSort.dir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (bookingSort.key === 'amount') return (a.totalPrice - b.totalPrice) * mult;
+      const aKey = `${a.bookingDate} ${a.startTime ?? ''}`;
+      const bKey = `${b.bookingDate} ${b.startTime ?? ''}`;
+      return aKey.localeCompare(bKey) * mult;
+    });
+  }, [bookings, bookingPayments, bookingStatusFilter, bookingPaymentFilter, bookingSort, now]);
+
     const filteredSubscriptions = useMemo(() => {
-    return subscriptions.filter(sub => {
+    const list = subscriptions.filter(sub => {
       const payStatus = subscriptionPayments.get(sub.id)?.status ?? sub.paymentStatus;
       if (subStatusFilter === 'CURRENT') {
         if (sub.status === 'CANCELLED' || sub.status === 'EXPIRED') return false;
@@ -359,7 +389,12 @@ export function AdminModal({
       }
       return true;
     });
-  }, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter]);
+
+    if (!subSort) return list;
+    const mult = subSort.dir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => a.endDate.localeCompare(b.endDate) * mult);
+  }, [subscriptions, subscriptionPayments, subStatusFilter, subPaymentFilter, subSort]);
+
   const paymentDateIso = (p: Payment): string => {
     const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
     const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
@@ -452,8 +487,8 @@ export function AdminModal({
     };
   }, [payments, paymentMonthFilter, todayIso, bookingsById, subscriptionsById]);
 
-  const filteredPayments = useMemo(() => {
-    return paymentsInMonth.filter(p => {
+    const filteredPayments = useMemo(() => {
+    const list = paymentsInMonth.filter(p => {
       if (paymentFilter === 'ACTION_REQUIRED') {
         const booking = p.bookingId ? bookingsById.get(p.bookingId) : undefined;
         const sub = p.subscriptionId ? subscriptionsById.get(p.subscriptionId) : undefined;
@@ -464,16 +499,27 @@ export function AdminModal({
         const needsPayment = p.status === 'UNPAID' && !isCancelled;
         const needsRefund = p.status === 'REFUND_PENDING';
         if (!needsPayment && !needsRefund) return false;
-            } else if (paymentFilter !== 'ALL' && p.status !== paymentFilter) {
+      } else if (paymentFilter !== 'ALL' && p.status !== paymentFilter) {
         return false;
       }
       return true;
     });
-  }, [paymentsInMonth, paymentFilter, bookingsById, subscriptionsById, now]);
+
+    if (!paymentSort) return list;
+    const mult = paymentSort.dir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (paymentSort.key === 'amount') return (a.amount - b.amount) * mult;
+      return paymentDateIso(a).localeCompare(paymentDateIso(b)) * mult;
+    });
+  }, [paymentsInMonth, paymentFilter, paymentSort, bookingsById, subscriptionsById, now]);
+
 
   function changeTab(next: Tab) {
     setTab(next);
     setPage(0);
+    setBookingSort(null);
+    setSubSort(null);
+    setPaymentSort(null);
     setBookingStatusFilter('UPCOMING');
     setBookingPaymentFilter('ALL');
     setSubStatusFilter('CURRENT');
@@ -1038,17 +1084,35 @@ export function AdminModal({
         visibleBookings.length ? (
           <div className="table-scroll">
             <table>
-              <thead>
+                            <thead>
                 <tr>
-                  <th>ДАТА</th>
+                  <th aria-sort={bookingSort?.key === 'date' ? (bookingSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                    <button
+                      type="button"
+                      className="admin-sort-button"
+                      style={{ justifyContent: 'flex-start' }}
+                      onClick={() => toggleSort(bookingSort, 'date', setBookingSort)}
+                    >
+                      ДАТА <span>{bookingSort?.key === 'date' ? (bookingSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                    </button>
+                  </th>
                   <th>КЛІЄНТ</th>
                   <th>РЕСУРС / ТАРИФ</th>
-                  <th>СУМА</th>
+                  <th className="admin-sort-cell" aria-sort={bookingSort?.key === 'amount' ? (bookingSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                    <button
+                      type="button"
+                      className="admin-sort-button"
+                      onClick={() => toggleSort(bookingSort, 'amount', setBookingSort)}
+                    >
+                      СУМА <span>{bookingSort?.key === 'amount' ? (bookingSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                    </button>
+                  </th>
                   <th>СТАТУС БРОНІ</th>
                   <th>ОПЛАТА</th>
                   <th>ДІЇ МЕНЕДЖЕРА</th>
                 </tr>
               </thead>
+
               <tbody>
                 {visibleBookings.map(booking => {
                   const client = clients[booking.userId];
@@ -1168,16 +1232,26 @@ export function AdminModal({
         visibleSubscriptions.length ? (
           <div className="table-scroll">
             <table>
-              <thead>
+                            <thead>
                 <tr>
                   <th>КЛІЄНТ</th>
                   <th>АБОНЕМЕНТ</th>
-                  <th>ТЕРМІН ДІЇ</th>
+                  <th aria-sort={subSort?.key === 'endDate' ? (subSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                    <button
+                      type="button"
+                      className="admin-sort-button"
+                      style={{ justifyContent: 'flex-start' }}
+                      onClick={() => toggleSort(subSort, 'endDate', setSubSort)}
+                    >
+                      ТЕРМІН ДІЇ <span>{subSort?.key === 'endDate' ? (subSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                    </button>
+                  </th>
                   <th>СТАТУС</th>
                   <th>ОПЛАТА</th>
                   <th>ДІЇ МЕНЕДЖЕРА</th>
                 </tr>
               </thead>
+
               <tbody>
                 {visibleSubscriptions.map(item => {
                   const client = clients[item.userId];
@@ -1306,17 +1380,35 @@ export function AdminModal({
         visiblePayments.length ? (
           <div className="table-scroll">
             <table>
-              <thead>
+                            <thead>
                 <tr>
-                  <th>ДАТА</th>
+                  <th aria-sort={paymentSort?.key === 'date' ? (paymentSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                    <button
+                      type="button"
+                      className="admin-sort-button"
+                      style={{ justifyContent: 'flex-start' }}
+                      onClick={() => toggleSort(paymentSort, 'date', setPaymentSort)}
+                    >
+                      ДАТА <span>{paymentSort?.key === 'date' ? (paymentSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                    </button>
+                  </th>
                   <th>КЛІЄНТ</th>
                   <th>ПРИЗНАЧЕННЯ</th>
                   <th>МЕТОД</th>
-                  <th>СУМА</th>
+                  <th className="admin-sort-cell" aria-sort={paymentSort?.key === 'amount' ? (paymentSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                    <button
+                      type="button"
+                      className="admin-sort-button"
+                      onClick={() => toggleSort(paymentSort, 'amount', setPaymentSort)}
+                    >
+                      СУМА <span>{paymentSort?.key === 'amount' ? (paymentSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                    </button>
+                  </th>
                   <th>СТАТУС ПЛАТЕЖУ</th>
                   <th>ЗМІНИТИ СТАТУС</th>
                 </tr>
               </thead>
+
               <tbody>
                 {visiblePayments.map(payment => {
                   const booking = payment.bookingId ? bookingsById.get(payment.bookingId) : undefined;
