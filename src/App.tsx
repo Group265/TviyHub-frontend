@@ -219,7 +219,16 @@ export default function App() {
             </div>
           </div></div>
       </section>
-      <section id="advantages"><SectionTitle title="Чому обирають Твій хаб?" description="Ми знаємо, як важливо мати стабільне світло, швидкий інтернет та робочу тишу в умовах сьогодення. Тому у нас завжди комфортно, немає зайвого шуму, а кожна деталь продумана для високої продуктивності." /><div className="badges">{['Безперервний інтернет', 'Світло 24/7', 'Чай та кава у вільному доступі'].map(text => <span key={text}><Icon name="imgIconCheck1" />{text}</span>)}</div><div className="gallery">{(['imgPhotoContainer', 'imgPhotoContainer1', 'imgPhotoContainer2', 'imgPhotoContainer3'] as const).map((name, i) => <img key={name} src={assets[name]} alt={['Кава та затишна зона відпочинку', 'Робоча атмосфера коворкінгу', 'Світлий простір Твій хаб', 'Гості коворкінгу'][i]} loading="lazy" />)}</div></section>
+      <section id="advantages"><SectionTitle title="Чому обирають Твій хаб?" description="Ми знаємо, як важливо мати стабільне світло, швидкий інтернет та робочу тишу в умовах сьогодення. Тому у нас завжди комфортно, немає зайвого шуму, а кожна деталь продумана для високої продуктивності." />
+        <div className="badges" style={{ display: 'flex', flexWrap: 'nowrap', gap: '24px', alignItems: 'center' }}>
+          {['Безперервний інтернет', 'Світло 24/7', 'Чай та кава у вільному доступі'].map(text => (
+            <span key={text} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+              <Icon name="imgIconCheck1" />
+              {text}
+            </span>
+          ))}
+        </div>
+        <div className="gallery">{(['imgPhotoContainer', 'imgPhotoContainer1', 'imgPhotoContainer2', 'imgPhotoContainer3'] as const).map((name, i) => <img key={name} src={assets[name]} alt={['Кава та затишна зона відпочинку', 'Робоча атмосфера коворкінгу', 'Світлий простір Твій хаб', 'Гості коворкінгу'][i]} loading="lazy" />)}</div></section>
       <section id="pricing"><SectionTitle title="Наші тарифні плани" description="Обирайте зручний формат: від кількох годин для термінового дзвінка до закріпленого власного столу на цілий місяць." /><div className="pricing-grid">{plans.map(plan => <article className="pricing-card" key={plan.title}><p className="eyebrow">{plan.label}</p><h3>{plan.title}</h3><div className="plan-price"><strong>{money(price(plan.workspaceType, plan.type, plan.reference))}</strong><span>{plan.unit}</span></div><ul className="checks">{plan.features.map(feature => <li key={feature}><Icon name="imgIconCheck" />{feature}</li>)}</ul><button className="btn outline" disabled={user?.role === 'ADMIN' && plan.type === 'SUBSCRIPTION'} onClick={() => planChoice(plan.type, plan.workspaceType)}>Забронювати<Icon name="imgIconCalendar1" /></button></article>)}</div>{!tariffs.length && <p className="muted centered">Орієнтовні ціни. Остаточну вартість буде підтверджено під час бронювання.</p>}</section>
       <section id="gallery">
         <SectionTitle
@@ -245,7 +254,7 @@ export default function App() {
       </section>
       <section id="location"><SectionTitle title="Де нас знайти?" /><div className="location-grid"><div className="contacts"><div><span className="contact-icon"><Icon name="imgIconLocation" /></span><div><h4>Адреса</h4><p>м. Миколаїв, вул. Олексія Вадатурського, 1</p></div></div><div><span className="contact-icon"><Icon name="imgGroup3" /></span><div><h4>Графік роботи</h4><p>Пн–Пт 09:00–19:00.<br />Субота та неділя — вихідні.</p></div></div><div><span className="contact-icon"><Icon name="imgIconPhone" /></span><div><h4>Контакти</h4><a href="tel:+380998710595">+380 99 871 0595</a></div></div></div><div className="location-map"><iframe title="Твій хаб на карті — Миколаїв, вул. Олексія Вадатурського, 1" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2722.2252615539714!2d31.989338599999996!3d46.976910000000004!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40c5c9396fa069b3%3A0x4f2d8be6a025fb9f!2s%D0%A2%D0%B2%D1%96%D0%B9%20%D1%85%D0%B0%D0%B1%20%E2%80%94%20%D0%BC%D1%96%D0%BD%D1%96%D0%BA%D0%BE%D0%B2%D0%BE%D1%80%D0%BA%D1%96%D0%BD%D0%B3!5e0!3m2!1suk!2sua!4v1794827457765!5m2!1suk!2sua&amp;hl=uk" loading="lazy" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" /><a className="map-link" href="https://www.google.com/maps/search/?api=1&amp;hl=uk&amp;query=Миколаїв%20Олексія%20Вадатурського%201" target="_blank" rel="noreferrer">Відкрити на карті ↗</a></div></div></section>
     </main>
-        <footer>
+    <footer>
       <div className="container">
         <div className="footer-top">
           <Logo />
@@ -254,7 +263,7 @@ export default function App() {
               <a key={id} href={`#${id}`}>{label}</a>
             ))}
           </nav>
-                    <div className="footer-contact">
+          <div className="footer-contact">
             <span><Icon name="imgIconLocation1" />м. Миколаїв, вул. Олексія Вадатурського, 1</span>
             <div className="footer-phone-col">
               <a href="tel:+380998710595"><Icon name="imgIconPhone1" />+380 99 871 0595</a>
